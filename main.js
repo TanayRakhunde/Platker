@@ -4,6 +4,8 @@ import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
 const videoElement = document.getElementById('input_video');
 const canvasElement = document.getElementById('output_canvas');
+const statusText = document.getElementById('tracking-status');
+const canvasCtx = canvasElement.getContext('2d');
 const cursorRight = document.getElementById('cursor-right');
 const cursorLeft = document.getElementById('cursor-left');
 const actionEl = document.getElementById('current-action');
