@@ -38,18 +38,50 @@
             </header>
 
             <div id="game-container">
-                <div class="text-zone">
-                    <div class="input-group">
-                        <label>SOURCE (SELECT & FIST TO COPY)</label>
-                        <div id="source-text" class="text-editor protected">The fox jumped over the lazy dog. Try selecting this text with your right hand pinch hold, then make a fist with your left hand to copy!</div>
+                <!-- OS Tab -->
+                <div id="tab-os" class="tab-content active">
+                    <div class="text-zone">
+                        <div class="input-group">
+                            <label>SOURCE (SELECT & FIST TO COPY)</label>
+                            <div id="source-text" class="text-editor protected">The fox jumped over the lazy dog. Try selecting this text with your right hand pinch hold, then make a fist with your left hand to copy!</div>
+                        </div>
+                        <div class="input-group">
+                            <label>TARGET (OPEN LEFT HAND TO PASTE)</label>
+                            <div id="target-text" class="text-editor" contenteditable="true" data-placeholder="Paste here..."></div>
+                        </div>
                     </div>
-                    <div class="input-group">
-                        <label>TARGET (OPEN LEFT HAND TO PASTE)</label>
-                        <div id="target-text" class="text-editor" contenteditable="true" data-placeholder="Paste here..."></div>
+                </div>
+
+                <!-- Lab Tab -->
+                <div id="tab-lab" class="tab-content">
+                    <div class="lab-container">
+                        <div class="lab-header">
+                            <h2>GESTURE <span>TRAINING LAB</span></h2>
+                            <p>Strike a pose and click capture to train the AI.</p>
+                        </div>
+                        
+                        <div class="lab-controls">
+                            <input type="text" id="gesture-name" placeholder="Gesture Name (e.g. PEACE)">
+                            <button id="capture-btn" class="primary-btn">CAPTURE POSE</button>
+                        </div>
+
+                        <div class="gesture-library">
+                            <h3>SAVED GESTURES</h3>
+                            <div id="gesture-list" class="gesture-list">
+                                <!-- Dynamically populated -->
+                                <p class="empty-msg">No custom gestures yet.</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
+
+        <!-- Tab Navigation -->
+        <nav class="system-nav">
+            <button class="nav-btn active" data-tab="os">DESKTOP</button>
+            <button class="nav-btn" data-tab="lab">GESTURE LAB</button>
+        </nav>
 
         <!-- Start Overlay -->
         <div id="start-overlay">

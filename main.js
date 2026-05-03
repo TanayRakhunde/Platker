@@ -14,6 +14,13 @@ const startOverlay = document.getElementById('start-overlay');
 const sourceArea = document.getElementById('source-text');
 const targetArea = document.getElementById('target-text');
 
+// Lab Elements
+const navBtns = document.querySelectorAll('.nav-btn');
+const tabContents = document.querySelectorAll('.tab-content');
+const gestureNameInput = document.getElementById('gesture-name');
+const captureBtn = document.getElementById('capture-btn');
+const gestureListEl = document.getElementById('gesture-list');
+
 // --- STATE ---
 const PINCH_THRESHOLD = 0.06;
 const FIST_THRESHOLD = 0.12;
@@ -23,6 +30,10 @@ let clipboardBuffer = "";
 let isRightPinching = false;
 let rightHandPos = { x: 0, y: 0 };
 let leftHandPos = { x: 0, y: 0 };
+
+// Training State
+let gestureLibrary = JSON.parse(localStorage.getItem('handos_gestures') || '[]');
+let currentHandLandmarks = null;
 
 // Click tracking
 let lastRightPinchTime = 0;
@@ -35,6 +46,91 @@ let wasSnapping = false;
 // For selection
 let selectionAnchorRange = null;
 
+// --- GESTURE LAB LOGIC ---
+
+// Feature Extraction: Distances from wrist (0) to all other landmarks (1-20)
+// Normalized by palm size (dist 0 to 5)
+function getFeatureVector(landmarks) {
+    const wrist = landmarks[0];
+    const palmSize = getDistance(wrist, landmarks[5]);
+    if (palmSize === 0) return null;
+    
+    return landmarks.slice(1).map(lm => getDistance(wrist, lm) / palmSize);
+}
+
+function saveGesture() {
+    const name = gestureNameInput.value.trim().toUpperCase();
+    if (!name || !currentHandLandmarks) {
+        alert("Enter a name and hold your hand in view!");
+        return;
+    }
+    
+    const vector = getFeatureVector(currentHandLandmarks);
+    if (!vector) return;
+
+    gestureLibrary.push({ name, vector });
+    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
+    renderGestureList();
+    gestureNameInput.value = "";
+}
+
+function renderGestureList() {
+    if (gestureLibrary.length === 0) {
+        gestureListEl.innerHTML = '<p class="empty-msg">No custom gestures yet.</p>';
+        return;
+    }
+    
+    gestureListEl.innerHTML = gestureLibrary.map((g, i) => `
+        <div class="gesture-tag">
+            <span>${g.name}</span>
+            <button onclick="removeGesture(${i})">×</button>
+        </div>
+    `).join('');
+}
+
+window.removeGesture = (index) => {
+    gestureLibrary.splice(index, 1);
+    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
+    renderGestureList();
+};
+
+function matchGesture(landmarks) {
+    const vector = getFeatureVector(landmarks);
+    if (!vector || gestureLibrary.length === 0) return null;
+    
+    let bestMatch = null;
+    let minDistance = 0.15; // Similarity threshold
+
+    gestureLibrary.forEach(gesture => {
+        let distance = 0;
+        for (let i = 0; i < vector.length; i++) {
+            distance += Math.abs(vector[i] - gesture.vector[i]);
+        }
+        distance /= vector.length;
+
+        if (distance < minDistance) {
+            minDistance = distance;
+            bestMatch = gesture.name;
+        }
+    });
+
+    return bestMatch;
+}
+
+// Tab Switching
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const tabId = `tab-${btn.dataset.tab}`;
+        document.getElementById(tabId).classList.add('active');
+    });
+});
+
+captureBtn.addEventListener('click', saveGesture);
+renderGestureList();
 // --- GESTURE UTILS ---
 function getDistance(p1, p2) {
     return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
@@ -204,16 +300,23 @@ function onResults(results) {
         statusText.innerText = 'ONLINE';
         
         results.multiHandLandmarks.forEach((landmarks, index) => {
-            // MediaPipe labels are from the camera's perspective.
-            // We swap them here to match the user's physical perspective in a mirrored view.
             const rawLabel = results.multiHandedness[index].label; 
             const label = rawLabel === 'Right' ? 'Left' : 'Right';
             
+            // Cache for Lab
+            currentHandLandmarks = landmarks;
+
             // Draw skeleton
             const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {color: color, lineWidth: 2});
             drawLandmarks(canvasCtx, landmarks, {color: '#fff', lineWidth: 1, radius: 2});
             
+            // CUSTOM GESTURE MATCHING
+            const customMatch = matchGesture(landmarks);
+            if (customMatch) {
+                actionEl.innerText = customMatch;
+            }
+
             const isPinching = getDistance(landmarks[4], landmarks[8]) < PINCH_THRESHOLD;
 
             if (label === 'Right') {
@@ -224,6 +327,7 @@ function onResults(results) {
         });
     } else {
         statusText.innerText = 'OFFLINE';
+        currentHandLandmarks = null;
     }
     canvasCtx.restore();
 }
