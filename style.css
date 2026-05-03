@@ -254,23 +254,65 @@ body {
     gap: 1rem;
 }
 
-.gesture-tag {
-    background: rgba(255, 0, 255, 0.1);
-    border: 1px solid var(--lab-accent);
-    padding: 0.5rem 1rem;
-    border-radius: 100px;
-    font-size: 0.8rem;
+.gesture-item {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 1.5rem;
     display: flex;
-    align-items: center;
-    gap: 0.5rem;
+    flex-direction: column;
+    gap: 1rem;
+    transition: all 0.3s ease;
 }
 
-.gesture-tag button {
-    background: transparent;
+.gesture-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--lab-accent);
+}
+
+.gesture-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gesture-type-tag {
+    font-size: 0.6rem;
+    font-weight: 800;
+    padding: 0.3rem 0.8rem;
+    border-radius: 100px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.command-mapping {
+    display: flex;
+    gap: 1rem;
+}
+
+.command-input {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    padding: 0.8rem;
+    color: var(--lab-accent);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.command-input::placeholder {
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.delete-btn {
+    background: rgba(255, 0, 0, 0.1);
+    color: #ff4444;
     border: none;
-    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 10px;
     cursor: pointer;
-    font-weight: bold;
 }
 
 header {

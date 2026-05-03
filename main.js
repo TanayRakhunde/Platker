@@ -40,18 +40,11 @@ let currentHandLandmarks = null;
 let isRecordingMotion = false;
 let recordedSequence = [];
 let liveBuffer = [];
-const BUFFER_SIZE = 40; // ~1.5 seconds at 30fps
+const BUFFER_SIZE = 40;
 
-// Click tracking
-let lastRightPinchTime = 0;
-let rightPinchCount = 0;
-const TRIPLE_CLICK_WINDOW = 600;
-
-// Snapping state
-let wasSnapping = false;
-
-// For selection
-let selectionAnchorRange = null;
+// Action Control
+let lastActionTime = 0;
+const ACTION_COOLDOWN = 1500; // 1.5s between custom actions
 
 // --- GESTURE LAB LOGIC ---
 
@@ -62,31 +55,36 @@ function getFeatureVector(landmarks) {
     return landmarks.slice(1).map(lm => getDistance(wrist, lm) / palmSize);
 }
 
-function saveGesture(type = 'pose') {
-    const name = gestureNameInput.value.trim().toUpperCase();
-    if (!name) {
-        alert("Enter a name!");
-        return;
+function calculateVectorDistance(v1, v2) {
+    let distance = 0;
+    for (let i = 0; i < v1.length; i++) {
+        distance += Math.abs(v1[i] - v2[i]);
     }
-    
-    if (type === 'pose') {
-        if (!currentHandLandmarks) return;
-        const vector = getFeatureVector(currentHandLandmarks);
-        gestureLibrary.push({ name, type: 'pose', vector });
-    } else {
-        if (recordedSequence.length < 10) return;
-        gestureLibrary.push({ name, type: 'motion', sequence: recordedSequence });
-    }
+    return distance / v1.length;
+}
 
-    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
-    renderGestureList();
-    gestureNameInput.value = "";
-    recordedSequence = [];
+function executeCommand(command) {
+    if (!command) return;
+    const cmd = command.toLowerCase();
+    console.log(`Executing AI Intent: ${cmd}`);
+
+    if (cmd.startsWith('open ')) {
+        let url = cmd.replace('open ', '').trim();
+        if (!url.startsWith('http')) url = 'https://' + url;
+        window.open(url, '_blank');
+    } else if (cmd.includes('scroll down')) {
+        window.scrollBy({ top: 500, behavior: 'smooth' });
+    } else if (cmd.includes('scroll up')) {
+        window.scrollBy({ top: -500, behavior: 'smooth' });
+    } else if (cmd.includes('reload') || cmd.includes('refresh')) {
+        location.reload();
+    } else if (cmd.includes('clear')) {
+        targetArea.innerText = "";
+    }
 }
 
 async function startMotionRecording() {
     if (isRecordingMotion) return;
-    
     const name = gestureNameInput.value.trim();
     if (!name) {
         alert("Enter a name first!");
@@ -98,7 +96,7 @@ async function startMotionRecording() {
     progressContainer.classList.remove('hidden');
     
     let startTime = Date.now();
-    const duration = 2000; // 2 seconds
+    const duration = 2000;
 
     const recordInterval = setInterval(() => {
         let elapsed = Date.now() - startTime;
@@ -119,6 +117,33 @@ async function startMotionRecording() {
     }, 50);
 }
 
+function updateGestureCommand(index, command) {
+    gestureLibrary[index].command = command;
+    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
+}
+
+function saveGesture(type = 'pose') {
+    const name = gestureNameInput.value.trim().toUpperCase();
+    if (!name) {
+        alert("Enter a name!");
+        return;
+    }
+    
+    if (type === 'pose') {
+        if (!currentHandLandmarks) return;
+        const vector = getFeatureVector(currentHandLandmarks);
+        gestureLibrary.push({ name, type: 'pose', vector, command: "" });
+    } else {
+        if (recordedSequence.length < 10) return;
+        gestureLibrary.push({ name, type: 'motion', sequence: recordedSequence, command: "" });
+    }
+
+    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
+    renderGestureList();
+    gestureNameInput.value = "";
+    recordedSequence = [];
+}
+
 function renderGestureList() {
     if (gestureLibrary.length === 0) {
         gestureListEl.innerHTML = '<p class="empty-msg">No custom gestures yet.</p>';
@@ -126,13 +151,24 @@ function renderGestureList() {
     }
     
     gestureListEl.innerHTML = gestureLibrary.map((g, i) => `
-        <div class="gesture-tag" style="border-color: ${g.type === 'motion' ? '#ffaa00' : '#ff00ff'}">
-            <span>${g.type === 'motion' ? '🎬' : '🖐️'} ${g.name}</span>
-            <button onclick="removeGesture(${i})">×</button>
+        <div class="gesture-item">
+            <div class="gesture-info">
+                <strong>${g.type === 'motion' ? '🎬' : '🖐️'} ${g.name}</strong>
+                <span class="gesture-type-tag">${g.type.toUpperCase()}</span>
+            </div>
+            <div class="command-mapping">
+                <input type="text" 
+                       class="command-input" 
+                       placeholder="AI Command (e.g. open google.com)" 
+                       value="${g.command || ''}"
+                       onchange="updateGestureCommand(${i}, this.value)">
+                <button class="delete-btn" onclick="removeGesture(${i})">DELETE</button>
+            </div>
         </div>
     `).join('');
 }
 
+window.updateGestureCommand = updateGestureCommand;
 window.removeGesture = (index) => {
     gestureLibrary.splice(index, 1);
     localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
@@ -143,7 +179,6 @@ function matchGesture(landmarks) {
     const vector = getFeatureVector(landmarks);
     if (!vector) return null;
 
-    // Update live buffer for motion matching
     liveBuffer.push(vector);
     if (liveBuffer.length > BUFFER_SIZE) liveBuffer.shift();
 
@@ -155,11 +190,9 @@ function matchGesture(landmarks) {
             let dist = calculateVectorDistance(vector, gesture.vector);
             if (dist < minDistance) {
                 minDistance = dist;
-                bestMatch = gesture.name;
+                bestMatch = gesture;
             }
         } else if (gesture.type === 'motion' && liveBuffer.length >= 10) {
-            // Simple sequence comparison (last frame of motion vs current frame)
-            // For a better match, we'd use DTW, but this is a solid heuristic
             const lastSavedFrame = gesture.sequence[gesture.sequence.length - 1];
             const firstSavedFrame = gesture.sequence[0];
             
@@ -167,12 +200,88 @@ function matchGesture(landmarks) {
             let distStart = calculateVectorDistance(liveBuffer[0], firstSavedFrame);
             
             if (distEnd < 0.1 && distStart < 0.15) {
-                bestMatch = `MOTION: ${gesture.name}`;
+                bestMatch = gesture;
             }
         }
     });
 
-    return bestMatch;
+    if (bestMatch) {
+        // Debounced execution
+        const now = Date.now();
+        if (now - lastActionTime > ACTION_COOLDOWN) {
+            executeCommand(bestMatch.command);
+            lastActionTime = now;
+        }
+        return bestMatch.name;
+    }
+
+    return null;
+}
+
+// Tab Switching
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        
+        btn.classList.add('active');
+        const tabId = `tab-${btn.dataset.tab}`;
+        document.getElementById(tabId).classList.add('active');
+    });
+});
+
+captureBtn.addEventListener('click', () => saveGesture('pose'));
+recordBtn.addEventListener('click', startMotionRecording);
+renderGestureList();
+
+window.updateGestureCommand = updateGestureCommand;
+window.removeGesture = (index) => {
+    gestureLibrary.splice(index, 1);
+    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
+    renderGestureList();
+};
+
+function matchGesture(landmarks) {
+    const vector = getFeatureVector(landmarks);
+    if (!vector) return null;
+
+    liveBuffer.push(vector);
+    if (liveBuffer.length > BUFFER_SIZE) liveBuffer.shift();
+
+    let bestMatch = null;
+    let minDistance = 0.12;
+
+    gestureLibrary.forEach(gesture => {
+        if (gesture.type === 'pose') {
+            let dist = calculateVectorDistance(vector, gesture.vector);
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = gesture;
+            }
+        } else if (gesture.type === 'motion' && liveBuffer.length >= 10) {
+            const lastSavedFrame = gesture.sequence[gesture.sequence.length - 1];
+            const firstSavedFrame = gesture.sequence[0];
+            
+            let distEnd = calculateVectorDistance(vector, lastSavedFrame);
+            let distStart = calculateVectorDistance(liveBuffer[0], firstSavedFrame);
+            
+            if (distEnd < 0.1 && distStart < 0.15) {
+                bestMatch = gesture;
+            }
+        }
+    });
+
+    if (bestMatch) {
+        // Debounced execution
+        const now = Date.now();
+        if (now - lastActionTime > ACTION_COOLDOWN) {
+            executeCommand(bestMatch.command);
+            lastActionTime = now;
+        }
+        return bestMatch.name;
+    }
+
+    return null;
 }
 
 function calculateVectorDistance(v1, v2) {
