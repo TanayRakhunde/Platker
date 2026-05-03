@@ -69,6 +69,32 @@ function getVoxel(x, y, z) {
     return voxels[key] || 0;
 }
 
+// --- NOISE FUNCTION (Simple Perlin-like) ---
+function lerp(a, b, t) { return a + (b - a) * t; }
+function fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+function grad(hash, x, y, z) {
+    const h = hash & 15;
+    const u = h < 8 ? x : y;
+    const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
+    return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+}
+const p = new Uint8Array(512);
+const permutation = new Uint8Array(256);
+for(let i=0; i<256; i++) permutation[i] = i;
+for(let i=255; i>0; i--) { const j = Math.floor(Math.random() * (i + 1)); [permutation[i], permutation[j]] = [permutation[j], permutation[i]]; }
+p.set(permutation); p.set(permutation, 256);
+
+function noise(x, y, z) {
+    const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255; const Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x); const v = fade(y); const w = fade(z);
+    const A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z, B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+    return lerp(w, lerp(v, lerp(u, grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z)),
+        lerp(u, grad(p[AB], x, y - 1, z), grad(p[BB], x - 1, y - 1, z))),
+        lerp(v, lerp(u, grad(p[AA + 1], x, y, z - 1), grad(p[BA + 1], x - 1, y, z - 1)),
+            lerp(u, grad(p[AB + 1], x, y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1))));
+}
+
 // --- WORLD GENERATION ---
 const boxGeometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
 const materials = {};
@@ -76,36 +102,68 @@ Object.values(BLOCKS).forEach(b => {
     materials[b.id] = new THREE.MeshStandardMaterial({ color: b.color });
 });
 
-const meshGroup = new THREE.Group();
-scene.add(meshGroup);
+const instancedMeshes = {};
+Object.values(BLOCKS).forEach(b => {
+    const im = new THREE.InstancedMesh(boxGeometry, materials[b.id], 50000);
+    im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    im.castShadow = true;
+    im.receiveShadow = true;
+    im.count = 0;
+    instancedMeshes[b.id] = im;
+    scene.add(im);
+});
 
 function updateWorldMesh() {
-    // Basic implementation: One mesh per block (Not optimized for large worlds)
-    // For a real Minecraft clone, use InstancedMesh or custom Buffers
-    meshGroup.clear();
+    Object.values(instancedMeshes).forEach(im => im.count = 0);
     
+    const matrix = new THREE.Matrix4();
     for (const key in voxels) {
         const [x, y, z] = key.split(',').map(Number);
         const blockId = voxels[key];
+        const im = instancedMeshes[blockId];
         
-        const mesh = new THREE.Mesh(boxGeometry, materials[blockId]);
-        mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
-        mesh.receiveShadow = true;
-        mesh.castShadow = true;
-        meshGroup.add(mesh);
+        matrix.setPosition(x + 0.5, y + 0.5, z + 0.5);
+        im.setMatrixAt(im.count, matrix);
+        im.count++;
+    }
+    Object.values(instancedMeshes).forEach(im => im.instanceMatrix.needsUpdate = true);
+}
+
+function generateTree(x, y, z) {
+    const trunkHeight = 4 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < trunkHeight; i++) {
+        setVoxel(x, y + i, z, BLOCKS.WOOD.id);
+    }
+    // Leaves
+    for (let lx = -2; lx <= 2; lx++) {
+        for (let lz = -2; lz <= 2; lz++) {
+            for (let ly = 0; ly <= 2; ly++) {
+                if (Math.abs(lx) + Math.abs(lz) + Math.abs(ly) < 4) {
+                    setVoxel(x + lx, y + trunkHeight + ly, z + lz, BLOCKS.LEAVES.id);
+                }
+            }
+        }
     }
 }
 
 // Generate Terrain
-for (let x = -CHUNK_SIZE; x < CHUNK_SIZE; x++) {
-    for (let z = -CHUNK_SIZE; z < CHUNK_SIZE; z++) {
-        const height = Math.floor(Math.sin(x / 8) * Math.cos(z / 8) * 3) + 10;
+const WORLD_RADIUS = 32;
+for (let x = -WORLD_RADIUS; x < WORLD_RADIUS; x++) {
+    for (let z = -WORLD_RADIUS; z < WORLD_RADIUS; z++) {
+        // Natural hills using noise
+        const n = noise(x * 0.1, 0, z * 0.1);
+        const height = Math.floor((n + 1) * 6) + 5;
+        
         for (let y = 0; y < height; y++) {
             let blockId = BLOCKS.STONE.id;
             if (y === height - 1) blockId = BLOCKS.GRASS.id;
             else if (y > height - 4) blockId = BLOCKS.DIRT.id;
-            
             setVoxel(x, y, z, blockId);
+        }
+
+        // Random trees
+        if (x % 10 === 0 && z % 10 === 0 && Math.random() > 0.5) {
+            generateTree(x, height, z);
         }
     }
 }
@@ -206,7 +264,7 @@ function shoot() {
 
     // Raycast hit
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects(meshGroup.children);
+    const intersects = raycaster.intersectObjects(Object.values(instancedMeshes));
 
     // Muzzle Flash
     const flashGeom = new THREE.SphereGeometry(0.05);
@@ -226,9 +284,14 @@ function shoot() {
         const intersect = intersects[0];
         tracerPoints[1] = weaponGroup.worldToLocal(intersect.point.clone());
         
-        // Break block on hit (Vandal is powerful!)
-        const pos = intersect.object.position.clone().subScalar(0.5);
-        setVoxel(pos.x, pos.y, pos.z, 0);
+        // Break block on hit using instanceId
+        const instanceId = intersect.instanceId;
+        const targetMesh = intersect.object;
+        const matrix = new THREE.Matrix4();
+        targetMesh.getMatrixAt(instanceId, matrix);
+        const pos = new THREE.Vector3().setFromMatrixPosition(matrix).subScalar(0.5);
+        
+        setVoxel(Math.floor(pos.x), Math.floor(pos.y), Math.floor(pos.z), 0);
         updateWorldMesh();
     }
 
@@ -257,13 +320,19 @@ window.addEventListener('mousedown', (event) => {
         isShooting = true;
     } else if (event.button === 2) { // Right Click: Place
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(meshGroup.children);
+        const intersects = raycaster.intersectObjects(Object.values(instancedMeshes));
+        
         if (intersects.length > 0) {
             const intersect = intersects[0];
-            const pos = intersect.object.position.clone().subScalar(0.5);
+            const instanceId = intersect.instanceId;
+            const targetMesh = intersect.object;
+            const matrix = new THREE.Matrix4();
+            targetMesh.getMatrixAt(instanceId, matrix);
+            const pos = new THREE.Vector3().setFromMatrixPosition(matrix).subScalar(0.5);
+            
             const normal = intersect.face.normal;
             const newPos = pos.add(normal);
-            setVoxel(newPos.x, newPos.y, newPos.z, BLOCKS.GRASS.id);
+            setVoxel(Math.floor(newPos.x), Math.floor(newPos.y), Math.floor(newPos.z), BLOCKS.GRASS.id);
             updateWorldMesh();
         }
     }
