@@ -20,13 +20,21 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: white;
-    font-size: 24px;
-    font-weight: 300;
+    width: 20px;
+    height: 20px;
     pointer-events: none;
     user-select: none;
-    mix-blend-mode: difference;
 }
+
+#crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: #00f2ff;
+    box-shadow: 0 0 5px #00f2ff;
+}
+
+#crosshair::before { width: 2px; height: 100%; left: 9px; }
+#crosshair::after { height: 2px; width: 100%; top: 9px; }
 
 /* HUD */
 #hud {
@@ -35,6 +43,25 @@ body {
     left: 50%;
     transform: translateX(-50%);
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+.ammo-display {
+    background: rgba(0, 0, 0, 0.6);
+    padding: 0.5rem 1.5rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    font-family: monospace;
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+}
+
+.ammo-display span {
+    color: #00f2ff;
 }
 
 .inventory {

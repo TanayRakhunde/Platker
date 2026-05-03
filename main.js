@@ -28,6 +28,8 @@ document.body.appendChild(renderer.domElement);
 
 const controls = new PointerLockControls(camera, document.body);
 const instructions = document.getElementById('instructions');
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2(0, 0); // Center of screen
 
 instructions.addEventListener('click', () => {
     controls.lock();
@@ -153,34 +155,123 @@ const onKeyUp = (event) => {
 document.addEventListener('keydown', onKeyDown);
 document.addEventListener('keyup', onKeyUp);
 
-// --- INTERACTION (PLACE/BREAK) ---
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2(0, 0); // Center of screen
+// --- WEAPON SYSTEM ---
+const weaponGroup = new THREE.Group();
+camera.add(weaponGroup);
+scene.add(camera); // Must add camera to scene to see its children
 
-window.addEventListener('mousedown', (event) => {
-    if (!controls.isLocked) return;
+function createVandal() {
+    // Voxel-style Vandal
+    const bodyGeom = new THREE.BoxGeometry(0.1, 0.2, 0.8);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    body.position.set(0.2, -0.2, -0.5);
+    weaponGroup.add(body);
 
+    const barrelGeom = new THREE.BoxGeometry(0.04, 0.04, 0.6);
+    const barrel = new THREE.Mesh(barrelGeom, bodyMat);
+    barrel.position.set(0.2, -0.15, -1.0);
+    weaponGroup.add(barrel);
+
+    const magGeom = new THREE.BoxGeometry(0.08, 0.3, 0.15);
+    const mag = new THREE.Mesh(magGeom, bodyMat);
+    mag.position.set(0.2, -0.35, -0.6);
+    mag.rotation.x = -0.2;
+    weaponGroup.add(mag);
+}
+createVandal();
+
+// Shooting state
+let isShooting = false;
+let ammo = 25;
+let maxAmmo = 25;
+let reserveAmmo = 75;
+let lastFireTime = 0;
+const fireRate = 0.1; // 10 rounds per sec (approx Vandal)
+const ammoCountEl = document.getElementById('ammo-count');
+
+function shoot() {
+    if (ammo <= 0) return;
+    
+    const now = performance.now() / 1000;
+    if (now - lastFireTime < fireRate) return;
+    
+    lastFireTime = now;
+    ammo--;
+    ammoCountEl.innerText = ammo;
+
+    // Recoil
+    velocity.y += 0.05; // Kick up
+    weaponGroup.position.z += 0.1; // Kick back
+
+    // Raycast hit
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(meshGroup.children);
 
+    // Muzzle Flash
+    const flashGeom = new THREE.SphereGeometry(0.05);
+    const flashMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
+    const flash = new THREE.Mesh(flashGeom, flashMat);
+    flash.position.set(0.2, -0.15, -1.3);
+    weaponGroup.add(flash);
+    setTimeout(() => weaponGroup.remove(flash), 50);
+
+    // Tracer
+    const tracerPoints = [
+        new THREE.Vector3(0.2, -0.15, -1.3),
+        new THREE.Vector3(0, 0, -50)
+    ];
+    
     if (intersects.length > 0) {
         const intersect = intersects[0];
-        const pos = intersect.object.position.clone().subScalar(0.5);
+        tracerPoints[1] = weaponGroup.worldToLocal(intersect.point.clone());
         
-        if (event.button === 0) { // Left Click: Break
-            setVoxel(pos.x, pos.y, pos.z, 0);
-            updateWorldMesh();
-        } else if (event.button === 2) { // Right Click: Place
+        // Break block on hit (Vandal is powerful!)
+        const pos = intersect.object.position.clone().subScalar(0.5);
+        setVoxel(pos.x, pos.y, pos.z, 0);
+        updateWorldMesh();
+    }
+
+    const tracerGeom = new THREE.BufferGeometry().setFromPoints(tracerPoints);
+    const tracerMat = new THREE.LineBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.8 });
+    const tracer = new THREE.Line(tracerGeom, tracerMat);
+    weaponGroup.add(tracer);
+    
+    // Fade out tracer
+    let opacity = 0.8;
+    const fade = setInterval(() => {
+        opacity -= 0.1;
+        tracerMat.opacity = opacity;
+        if (opacity <= 0) {
+            weaponGroup.remove(tracer);
+            clearInterval(fade);
+        }
+    }, 20);
+}
+
+// --- INTERACTION (PLACE/BREAK/SHOOT) ---
+window.addEventListener('mousedown', (event) => {
+    if (!controls.isLocked) return;
+
+    if (event.button === 0) { // Left Click: Shoot/Break
+        isShooting = true;
+    } else if (event.button === 2) { // Right Click: Place
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObjects(meshGroup.children);
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            const pos = intersect.object.position.clone().subScalar(0.5);
             const normal = intersect.face.normal;
             const newPos = pos.add(normal);
-            setVoxel(newPos.x, newPos.y, newPos.z, BLOCKS.GRASS.id); // Default to grass for now
+            setVoxel(newPos.x, newPos.y, newPos.z, BLOCKS.GRASS.id);
             updateWorldMesh();
         }
     }
 });
 
-// Prevent context menu on right click
-window.addEventListener('contextmenu', e => e.preventDefault());
+window.addEventListener('mouseup', (event) => {
+    if (event.button === 0) isShooting = false;
+});
 
 // --- GAME LOOP ---
 let prevTime = performance.now();
@@ -191,6 +282,20 @@ function animate() {
     if (controls.isLocked) {
         const time = performance.now();
         const delta = (time - prevTime) / 1000;
+
+        // Shooting
+        if (isShooting) shoot();
+
+        // Weapon Sway & Recoil Recovery
+        weaponGroup.position.x += (0 - weaponGroup.position.x) * 5 * delta;
+        weaponGroup.position.y += (0 - weaponGroup.position.y) * 5 * delta;
+        weaponGroup.position.z += (0 - weaponGroup.position.z) * 10 * delta;
+
+        // Movement sway
+        if (moveForward || moveBackward || moveLeft || moveRight) {
+            weaponGroup.position.y += Math.sin(time * 0.01) * 0.002;
+            weaponGroup.position.x += Math.cos(time * 0.005) * 0.001;
+        }
 
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
