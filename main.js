@@ -33,17 +33,33 @@ function getDistance(p1, p2) {
 }
 
 function isFist(landmarks) {
-    const palm = landmarks[0];
-    const tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
-    const avgDist = tips.reduce((sum, tip) => sum + getDistance(palm, tip), 0) / 4;
-    return avgDist < FIST_THRESHOLD;
+    // Check if fingers are folded: tip is closer to wrist than mid-joint
+    const wrist = landmarks[0];
+    const fingerTips = [8, 12, 16, 20];
+    const fingerBases = [5, 9, 13, 17];
+    
+    let foldedCount = 0;
+    for (let i = 0; i < 4; i++) {
+        const tipDist = getDistance(wrist, landmarks[fingerTips[i]]);
+        const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
+        if (tipDist < baseDist) foldedCount++;
+    }
+    return foldedCount >= 3; // Fist if at least 3 fingers are folded
 }
 
 function isOpen(landmarks) {
-    const palm = landmarks[0];
-    const tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
-    const avgDist = tips.reduce((sum, tip) => sum + getDistance(palm, tip), 0) / 4;
-    return avgDist > OPEN_THRESHOLD;
+    // Check if fingers are extended: tip is significantly further from wrist than base
+    const wrist = landmarks[0];
+    const fingerTips = [8, 12, 16, 20];
+    const fingerBases = [5, 9, 13, 17];
+    
+    let extendedCount = 0;
+    for (let i = 0; i < 4; i++) {
+        const tipDist = getDistance(wrist, landmarks[fingerTips[i]]);
+        const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
+        if (tipDist > baseDist * 1.3) extendedCount++;
+    }
+    return extendedCount >= 3; // Open if at least 3 fingers are extended
 }
 
 // --- INTERACTION ---
