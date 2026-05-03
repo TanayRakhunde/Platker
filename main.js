@@ -24,6 +24,9 @@ let isRightPinching = false;
 let rightHandPos = { x: 0, y: 0 };
 let leftHandPos = { x: 0, y: 0 };
 
+// For selection
+let selectionAnchorRange = null;
+
 // --- GESTURE UTILS ---
 function getDistance(p1, p2) {
     return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
@@ -48,21 +51,44 @@ function handleRightHand(landmarks, isPinching) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
     
-    // Smooth movement
-    rightHandPos.x += (targetX - rightHandPos.x) * 0.3;
-    rightHandPos.y += (targetY - rightHandPos.y) * 0.3;
+    // STICKY CURSOR: Reduce smoothing factor while pinching to "lock" onto text and prevent jitter
+    const currentLerp = isPinching ? 0.08 : 0.3;
+    rightHandPos.x += (targetX - rightHandPos.x) * currentLerp;
+    rightHandPos.y += (targetY - rightHandPos.y) * currentLerp;
     
     cursorRight.style.left = `${rightHandPos.x}px`;
     cursorRight.style.top = `${rightHandPos.y}px`;
     cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.7 : 1})`;
 
-    // Simulate Selection if pinching on textarea
+    // ADVANCED SELECTION LOGIC
     if (isPinching) {
-        const el = document.elementFromPoint(rightHandPos.x, rightHandPos.y);
-        if (el === sourceArea || el === targetArea) {
-            el.focus();
+        const sel = window.getSelection();
+        const range = document.caretRangeFromPoint(rightHandPos.x, rightHandPos.y);
+        
+        if (range) {
+            if (!isRightPinching) {
+                // START PINCH: Set anchor
+                selectionAnchorRange = range.cloneRange();
+                sel.removeAllRanges();
+            } else {
+                // DRAGGING PINCH: Expand selection
+                const newRange = document.createRange();
+                
+                // Determine direction to set start/end correctly
+                if (selectionAnchorRange.compareBoundaryPoints(Range.START_TO_START, range) <= 0) {
+                    newRange.setStart(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
+                    newRange.setEnd(range.startContainer, range.startOffset);
+                } else {
+                    newRange.setStart(range.startContainer, range.startOffset);
+                    newRange.setEnd(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
+                }
+                
+                sel.removeAllRanges();
+                sel.addRange(newRange);
+            }
         }
     }
+    
     isRightPinching = isPinching;
 }
 
@@ -80,22 +106,27 @@ function handleLeftHand(landmarks) {
     const open = isOpen(landmarks);
 
     if (fist) {
-        // Copy action
+        // Copy action from selection
         const selection = window.getSelection().toString();
-        if (selection) {
+        if (selection && selection.length > 0) {
             clipboardBuffer = selection;
             actionEl.innerText = "COPIED!";
             cursorLeft.style.transform = "translate(-50%, -50%) scale(0.6)";
         }
     } else if (open) {
-        // Paste action
+        // Paste action into focused element or target area
         if (clipboardBuffer && actionEl.innerText !== "PASTED!") {
-            targetArea.value += clipboardBuffer;
-            actionEl.innerText = "PASTED!";
-            cursorLeft.style.transform = "translate(-50%, -50%) scale(1.3)";
+            const activeEl = document.activeElement;
+            if (activeEl.classList.contains('text-editor')) {
+                activeEl.innerText += clipboardBuffer;
+                actionEl.innerText = "PASTED!";
+                cursorLeft.style.transform = "translate(-50%, -50%) scale(1.3)";
+            }
         }
     } else {
-        actionEl.innerText = "IDLE";
+        if (actionEl.innerText !== "IDLE") {
+            setTimeout(() => actionEl.innerText = "IDLE", 1000);
+        }
         cursorLeft.style.transform = "translate(-50%, -50%) scale(1)";
     }
 }

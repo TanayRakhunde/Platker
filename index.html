@@ -40,12 +40,12 @@
             <div id="game-container">
                 <div class="text-zone">
                     <div class="input-group">
-                        <label>SOURCE TEXT (SELECT & FIST TO COPY)</label>
-                        <textarea id="source-text" readonly>The fox jumped over the lazy dog. Try selecting this text with your right hand pinch hold, then make a fist with your left hand to copy!</textarea>
+                        <label>SOURCE (SELECT & FIST TO COPY)</label>
+                        <div id="source-text" class="text-editor" contenteditable="true">The fox jumped over the lazy dog. Try selecting this text with your right hand pinch hold, then make a fist with your left hand to copy!</div>
                     </div>
                     <div class="input-group">
-                        <label>TARGET TEXT (OPEN LEFT HAND TO PASTE)</label>
-                        <textarea id="target-text" placeholder="Paste here..."></textarea>
+                        <label>TARGET (OPEN LEFT HAND TO PASTE)</label>
+                        <div id="target-text" class="text-editor" contenteditable="true" data-placeholder="Paste here..."></div>
                     </div>
                 </div>
             </div>
