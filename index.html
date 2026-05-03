@@ -21,31 +21,31 @@
             </div>
         </div>
 
-        <!-- Hand Cursor -->
-        <div id="hand-cursor">
+        <!-- Hand Cursors -->
+        <div id="cursor-right" class="hand-cursor right">
             <div class="cursor-ring"></div>
-            <div class="cursor-point"></div>
+            <div class="cursor-label">R</div>
+        </div>
+        <div id="cursor-left" class="hand-cursor left">
+            <div class="cursor-ring"></div>
+            <div class="cursor-label">L</div>
         </div>
 
         <!-- Interaction UI -->
         <div class="ui-overlay">
             <header>
-                <div class="logo">HAND<span>OS</span></div>
+                <div class="logo">HAND<span>OS PRO</span></div>
             </header>
 
             <div id="game-container">
-                <div class="desktop-grid">
-                    <div class="icon-box" id="btn-1">
-                        <div class="icon">📁</div>
-                        <span>FILES</span>
+                <div class="text-zone">
+                    <div class="input-group">
+                        <label>SOURCE TEXT (SELECT & FIST TO COPY)</label>
+                        <textarea id="source-text" readonly>The fox jumped over the lazy dog. Try selecting this text with your right hand pinch hold, then make a fist with your left hand to copy!</textarea>
                     </div>
-                    <div class="icon-box" id="btn-2">
-                        <div class="icon">🌐</div>
-                        <span>WEB</span>
-                    </div>
-                    <div class="icon-box" id="btn-3">
-                        <div class="icon">⚙️</div>
-                        <span>SETTINGS</span>
+                    <div class="input-group">
+                        <label>TARGET TEXT (OPEN LEFT HAND TO PASTE)</label>
+                        <textarea id="target-text" placeholder="Paste here..."></textarea>
                     </div>
                 </div>
             </div>
