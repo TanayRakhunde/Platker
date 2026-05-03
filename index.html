@@ -3,11 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fresh Project</title>
+    <title>HandCursor | AI Interaction</title>
     <link rel="stylesheet" href="./style.css">
 </head>
 <body>
-    <div id="app"></div>
+    <div id="app">
+        <!-- Camera Preview (Background) -->
+        <div class="camera-wrapper">
+            <video id="input_video" playsinline></video>
+            <canvas id="output_canvas"></canvas>
+        </div>
+
+        <!-- Hand Cursor -->
+        <div id="hand-cursor">
+            <div class="cursor-ring"></div>
+            <div class="cursor-point"></div>
+        </div>
+
+        <!-- Interaction UI -->
+        <div class="ui-overlay">
+            <header>
+                <div class="logo">HAND<span>CURSOR</span></div>
+                <div class="status" id="tracking-status">Initializing AI...</div>
+            </header>
+
+            <div id="game-container">
+                <!-- Floating elements will be generated here -->
+                <div class="instruction">Move your index finger to control the cursor. Pinch to click.</div>
+            </div>
+            
+            <div class="stats-panel">
+                <div class="stat">Landmarks: <span id="landmark-count">0</span></div>
+                <div class="stat">Action: <span id="current-action">None</span></div>
+            </div>
+        </div>
+
+        <!-- Start Overlay -->
+        <div id="start-overlay">
+            <div class="menu-card">
+                <h2>AI Vision Interface</h2>
+                <p>Allow camera access to transform your hand into a digital controller.</p>
+                <button class="btn btn-primary" id="start-btn">ENABLE SENSORS</button>
+            </div>
+        </div>
+    </div>
     <script type="module" src="./main.js"></script>
 </body>
 </html>
