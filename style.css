@@ -469,16 +469,18 @@ header {
 
 /* Overlays */
 #start-overlay {
-    position: absolute;
+    position: fixed; /* Changed from absolute for total coverage */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.9);
-    z-index: 200;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 9999; /* Moved to front-most layer */
     display: flex;
     justify-content: center;
     align-items: center;
+    pointer-events: auto; /* Force clickability */
+    transition: opacity 0.5s ease;
 }
 
 .menu-card {

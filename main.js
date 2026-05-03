@@ -533,9 +533,15 @@ const camera = new Camera(videoElement, {
 });
 
 startBtn.addEventListener('click', () => {
+    console.log("HandOS: Initializing Sensors...");
     startOverlay.style.opacity = '0';
     setTimeout(() => {
         startOverlay.style.display = 'none';
-        camera.start();
+        camera.start().then(() => {
+            console.log("HandOS: Camera Started Successfully");
+        }).catch(err => {
+            console.error("HandOS: Camera Failed", err);
+            statusText.innerText = "ERROR: CAMERA BLOCKED";
+        });
     }, 500);
 });
