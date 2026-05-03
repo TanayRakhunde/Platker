@@ -61,8 +61,14 @@
                         </div>
                         
                         <div class="lab-controls">
-                            <input type="text" id="gesture-name" placeholder="Gesture Name (e.g. PEACE)">
-                            <button id="capture-btn" class="primary-btn">CAPTURE POSE</button>
+                            <input type="text" id="gesture-name" placeholder="Gesture Name (e.g. SNAP)">
+                            <button id="capture-btn" class="primary-btn">POSE (1 FRAME)</button>
+                            <button id="record-btn" class="primary-btn motion-btn">MOTION (2 SEC)</button>
+                        </div>
+
+                        <div id="record-progress-container" class="hidden">
+                            <div id="record-progress-bar"></div>
+                            <span id="record-status">RECORDING...</span>
                         </div>
 
                         <div class="gesture-library">

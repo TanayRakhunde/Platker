@@ -19,6 +19,9 @@ const navBtns = document.querySelectorAll('.nav-btn');
 const tabContents = document.querySelectorAll('.tab-content');
 const gestureNameInput = document.getElementById('gesture-name');
 const captureBtn = document.getElementById('capture-btn');
+const recordBtn = document.getElementById('record-btn');
+const progressContainer = document.getElementById('record-progress-container');
+const progressBar = document.getElementById('record-progress-bar');
 const gestureListEl = document.getElementById('gesture-list');
 
 // --- STATE ---
@@ -34,6 +37,10 @@ let leftHandPos = { x: 0, y: 0 };
 // Training State
 let gestureLibrary = JSON.parse(localStorage.getItem('handos_gestures') || '[]');
 let currentHandLandmarks = null;
+let isRecordingMotion = false;
+let recordedSequence = [];
+let liveBuffer = [];
+const BUFFER_SIZE = 40; // ~1.5 seconds at 30fps
 
 // Click tracking
 let lastRightPinchTime = 0;
@@ -48,30 +55,68 @@ let selectionAnchorRange = null;
 
 // --- GESTURE LAB LOGIC ---
 
-// Feature Extraction: Distances from wrist (0) to all other landmarks (1-20)
-// Normalized by palm size (dist 0 to 5)
 function getFeatureVector(landmarks) {
     const wrist = landmarks[0];
     const palmSize = getDistance(wrist, landmarks[5]);
     if (palmSize === 0) return null;
-    
     return landmarks.slice(1).map(lm => getDistance(wrist, lm) / palmSize);
 }
 
-function saveGesture() {
+function saveGesture(type = 'pose') {
     const name = gestureNameInput.value.trim().toUpperCase();
-    if (!name || !currentHandLandmarks) {
-        alert("Enter a name and hold your hand in view!");
+    if (!name) {
+        alert("Enter a name!");
         return;
     }
     
-    const vector = getFeatureVector(currentHandLandmarks);
-    if (!vector) return;
+    if (type === 'pose') {
+        if (!currentHandLandmarks) return;
+        const vector = getFeatureVector(currentHandLandmarks);
+        gestureLibrary.push({ name, type: 'pose', vector });
+    } else {
+        if (recordedSequence.length < 10) return;
+        gestureLibrary.push({ name, type: 'motion', sequence: recordedSequence });
+    }
 
-    gestureLibrary.push({ name, vector });
     localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
     renderGestureList();
     gestureNameInput.value = "";
+    recordedSequence = [];
+}
+
+async function startMotionRecording() {
+    if (isRecordingMotion) return;
+    
+    const name = gestureNameInput.value.trim();
+    if (!name) {
+        alert("Enter a name first!");
+        return;
+    }
+
+    isRecordingMotion = true;
+    recordedSequence = [];
+    progressContainer.classList.remove('hidden');
+    
+    let startTime = Date.now();
+    const duration = 2000; // 2 seconds
+
+    const recordInterval = setInterval(() => {
+        let elapsed = Date.now() - startTime;
+        let progress = (elapsed / duration) * 100;
+        progressBar.style.width = `${progress}%`;
+
+        if (currentHandLandmarks) {
+            const vector = getFeatureVector(currentHandLandmarks);
+            if (vector) recordedSequence.push(vector);
+        }
+
+        if (elapsed >= duration) {
+            clearInterval(recordInterval);
+            isRecordingMotion = false;
+            progressContainer.classList.add('hidden');
+            saveGesture('motion');
+        }
+    }, 50);
 }
 
 function renderGestureList() {
@@ -81,8 +126,8 @@ function renderGestureList() {
     }
     
     gestureListEl.innerHTML = gestureLibrary.map((g, i) => `
-        <div class="gesture-tag">
-            <span>${g.name}</span>
+        <div class="gesture-tag" style="border-color: ${g.type === 'motion' ? '#ffaa00' : '#ff00ff'}">
+            <span>${g.type === 'motion' ? '🎬' : '🖐️'} ${g.name}</span>
             <button onclick="removeGesture(${i})">×</button>
         </div>
     `).join('');
@@ -96,25 +141,46 @@ window.removeGesture = (index) => {
 
 function matchGesture(landmarks) {
     const vector = getFeatureVector(landmarks);
-    if (!vector || gestureLibrary.length === 0) return null;
-    
+    if (!vector) return null;
+
+    // Update live buffer for motion matching
+    liveBuffer.push(vector);
+    if (liveBuffer.length > BUFFER_SIZE) liveBuffer.shift();
+
     let bestMatch = null;
-    let minDistance = 0.15; // Similarity threshold
+    let minDistance = 0.12;
 
     gestureLibrary.forEach(gesture => {
-        let distance = 0;
-        for (let i = 0; i < vector.length; i++) {
-            distance += Math.abs(vector[i] - gesture.vector[i]);
-        }
-        distance /= vector.length;
-
-        if (distance < minDistance) {
-            minDistance = distance;
-            bestMatch = gesture.name;
+        if (gesture.type === 'pose') {
+            let dist = calculateVectorDistance(vector, gesture.vector);
+            if (dist < minDistance) {
+                minDistance = dist;
+                bestMatch = gesture.name;
+            }
+        } else if (gesture.type === 'motion' && liveBuffer.length >= 10) {
+            // Simple sequence comparison (last frame of motion vs current frame)
+            // For a better match, we'd use DTW, but this is a solid heuristic
+            const lastSavedFrame = gesture.sequence[gesture.sequence.length - 1];
+            const firstSavedFrame = gesture.sequence[0];
+            
+            let distEnd = calculateVectorDistance(vector, lastSavedFrame);
+            let distStart = calculateVectorDistance(liveBuffer[0], firstSavedFrame);
+            
+            if (distEnd < 0.1 && distStart < 0.15) {
+                bestMatch = `MOTION: ${gesture.name}`;
+            }
         }
     });
 
     return bestMatch;
+}
+
+function calculateVectorDistance(v1, v2) {
+    let distance = 0;
+    for (let i = 0; i < v1.length; i++) {
+        distance += Math.abs(v1[i] - v2[i]);
+    }
+    return distance / v1.length;
 }
 
 // Tab Switching
@@ -129,7 +195,8 @@ navBtns.forEach(btn => {
     });
 });
 
-captureBtn.addEventListener('click', saveGesture);
+captureBtn.addEventListener('click', () => saveGesture('pose'));
+recordBtn.addEventListener('click', startMotionRecording);
 renderGestureList();
 // --- GESTURE UTILS ---
 function getDistance(p1, p2) {

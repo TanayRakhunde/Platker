@@ -162,7 +162,45 @@ body {
     display: flex;
     flex-direction: column;
     gap: 2rem;
+    pointer-events: auto; /* Allow interaction */
 }
+
+.motion-btn {
+    background: #ffaa00;
+}
+
+#record-progress-container {
+    width: 100%;
+    height: 30px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 100px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+}
+
+#record-progress-bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0%;
+    background: var(--lab-accent);
+    transition: width 0.1s linear;
+}
+
+#record-status {
+    position: relative;
+    z-index: 2;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #fff;
+}
+
+.hidden { display: none !important; }
 
 .lab-header h2 {
     font-size: 1.5rem;
