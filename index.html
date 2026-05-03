@@ -8,10 +8,17 @@
 </head>
 <body>
     <div id="app">
-        <!-- Camera Preview (Background) -->
-        <div class="camera-wrapper">
-            <video id="input_video" playsinline></video>
-            <canvas id="output_canvas"></canvas>
+        <!-- Hand Monitor (Side Panel) -->
+        <div class="hand-monitor">
+            <div class="monitor-title">AI VISION MONITOR</div>
+            <div class="camera-wrapper">
+                <video id="input_video" playsinline></video>
+                <canvas id="output_canvas"></canvas>
+            </div>
+            <div class="monitor-stats">
+                <span id="tracking-status">INIT...</span>
+                <span id="current-action">IDLE</span>
+            </div>
         </div>
 
         <!-- Hand Cursor -->
@@ -23,18 +30,24 @@
         <!-- Interaction UI -->
         <div class="ui-overlay">
             <header>
-                <div class="logo">HAND<span>CURSOR</span></div>
-                <div class="status" id="tracking-status">Initializing AI...</div>
+                <div class="logo">HAND<span>OS</span></div>
             </header>
 
             <div id="game-container">
-                <!-- Floating elements will be generated here -->
-                <div class="instruction">Move your index finger to control the cursor. Pinch to click.</div>
-            </div>
-            
-            <div class="stats-panel">
-                <div class="stat">Landmarks: <span id="landmark-count">0</span></div>
-                <div class="stat">Action: <span id="current-action">None</span></div>
+                <div class="desktop-grid">
+                    <div class="icon-box" id="btn-1">
+                        <div class="icon">📁</div>
+                        <span>FILES</span>
+                    </div>
+                    <div class="icon-box" id="btn-2">
+                        <div class="icon">🌐</div>
+                        <span>WEB</span>
+                    </div>
+                    <div class="icon-box" id="btn-3">
+                        <div class="icon">⚙️</div>
+                        <span>SETTINGS</span>
+                    </div>
+                </div>
             </div>
         </div>
 
