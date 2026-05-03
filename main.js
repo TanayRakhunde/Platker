@@ -7,7 +7,6 @@ const canvasElement = document.getElementById('output_canvas');
 const canvasCtx = canvasElement.getContext('2d');
 const cursor = document.getElementById('hand-cursor');
 const statusText = document.getElementById('tracking-status');
-const landmarkCountEl = null; // Removed in UI
 const actionEl = document.getElementById('current-action');
 const gameContainer = document.getElementById('game-container');
 const startBtn = document.getElementById('start-btn');
@@ -20,14 +19,71 @@ let targetX = 0;
 let targetY = 0;
 const lerpFactor = 0.25;
 
+// --- CURSOR PARTICLES ---
+const particleCount = 20;
+const particles = [];
+function initParticles() {
+    for (let i = 0; i < particleCount; i++) {
+        const p = document.createElement('div');
+        p.className = 'cursor-particle';
+        cursor.appendChild(p);
+        particles.push({
+            el: p,
+            ox: 0, // Offset X
+            oy: 0  // Offset Y
+        });
+    }
+}
+initParticles();
+
 // --- INTERACTION LOGIC ---
 const PINCH_THRESHOLD = 0.05;
+const FIST_THRESHOLD = 0.15;
 let wasPinching = false;
+let isFist = false;
+
+function detectFist(landmarks) {
+    // Wrist is 0, Palm center is 9
+    const palm = landmarks[0];
+    const tips = [landmarks[8], landmarks[12], landmarks[16], landmarks[20]];
+    
+    let totalDist = 0;
+    tips.forEach(tip => {
+        const dx = tip.x - palm.x;
+        const dy = tip.y - palm.y;
+        totalDist += Math.sqrt(dx*dx + dy*dy);
+    });
+    
+    return (totalDist / 4) < FIST_THRESHOLD;
+}
+
+function handleExplosion(fistActive) {
+    if (fistActive === isFist) return;
+    isFist = fistActive;
+    
+    if (isFist) {
+        cursor.classList.add('exploded');
+        particles.forEach(p => {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 50 + Math.random() * 150;
+            p.ox = Math.cos(angle) * dist;
+            p.oy = Math.sin(angle) * dist;
+            p.el.style.transform = `translate(${p.ox}px, ${p.oy}px) scale(${Math.random()})`;
+        });
+    } else {
+        cursor.classList.remove('exploded');
+        particles.forEach(p => {
+            p.ox = 0;
+            p.oy = 0;
+            p.el.style.transform = `translate(0, 0) scale(1)`;
+        });
+    }
+}
 
 function checkInteractions(isPinching) {
-    const icons = document.querySelectorAll('.icon-box');
-    let hoveredOne = false;
+    if (isFist) return; // Can't click with a fist
 
+    const icons = document.querySelectorAll('.icon-box');
     icons.forEach(icon => {
         const rect = icon.getBoundingClientRect();
         const isHovered = (
@@ -39,25 +95,19 @@ function checkInteractions(isPinching) {
 
         if (isHovered) {
             icon.classList.add('hovered');
-            hoveredOne = true;
-            
-            // Trigger Click on Pinch Start
             if (isPinching && !wasPinching) {
                 icon.classList.add('clicked');
                 setTimeout(() => icon.classList.remove('clicked'), 200);
-                console.log(`Clicked ${icon.id}`);
             }
         } else {
             icon.classList.remove('hovered');
         }
     });
-
     wasPinching = isPinching;
 }
 
 // --- MEDIAPIPE LOGIC ---
 function onResults(results) {
-    // Resize monitor canvas to match side panel aspect ratio
     const rect = canvasElement.parentElement.getBoundingClientRect();
     canvasElement.width = rect.width;
     canvasElement.height = rect.height;
@@ -65,7 +115,6 @@ function onResults(results) {
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     
-    // Draw the video frame to the monitor canvas
     canvasCtx.scale(-1, 1);
     canvasCtx.drawImage(results.image, -canvasElement.width, 0, canvasElement.width, canvasElement.height);
     canvasCtx.scale(-1, 1);
@@ -74,35 +123,39 @@ function onResults(results) {
         statusText.innerText = 'TRACKING';
         
         for (const landmarks of results.multiHandLandmarks) {
-            // Draw skeleton in monitor
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {color: '#00f2ff', lineWidth: 2});
             drawLandmarks(canvasCtx, landmarks, {color: '#fff', lineWidth: 1, radius: 2});
             
-            // Get Index Finger Tip (8) and Thumb Tip (4)
             const indexTip = landmarks[8];
             const thumbTip = landmarks[4];
             
-            // Map to FULL SCREEN (Proportionate)
-            // landmarks.x/y is 0-1 relative to the video frame
             targetX = (1 - indexTip.x) * window.innerWidth;
             targetY = indexTip.y * window.innerHeight;
             
-            // Pinch Detection
-            const dx = indexTip.x - thumbTip.x;
-            const dy = indexTip.y - thumbTip.y;
-            const dz = indexTip.z - thumbTip.z;
-            const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
-            
-            const isPinching = distance < PINCH_THRESHOLD;
-            actionEl.innerText = isPinching ? 'CLICK' : 'HOVER';
-            
-            if (isPinching) {
-                cursor.style.transform = 'translate(-50%, -50%) scale(0.7)';
+            // Fist Detection
+            const fistActive = detectFist(landmarks);
+            handleExplosion(fistActive);
+
+            if (!isFist) {
+                // Pinch Detection
+                const dx = indexTip.x - thumbTip.x;
+                const dy = indexTip.y - thumbTip.y;
+                const dz = indexTip.z - thumbTip.z;
+                const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                
+                const isPinching = distance < PINCH_THRESHOLD;
+                actionEl.innerText = isPinching ? 'CLICK' : 'HOVER';
+                
+                if (isPinching) {
+                    cursor.style.transform = 'translate(-50%, -50%) scale(0.7)';
+                } else {
+                    cursor.style.transform = 'translate(-50%, -50%) scale(1)';
+                }
+                
+                checkInteractions(isPinching);
             } else {
-                cursor.style.transform = 'translate(-50%, -50%) scale(1)';
+                actionEl.innerText = 'FIST (EXPLODED)';
             }
-            
-            checkInteractions(isPinching);
         }
     } else {
         statusText.innerText = 'OFFLINE';
@@ -152,7 +205,5 @@ startBtn.addEventListener('click', () => {
     setTimeout(() => {
         startOverlay.style.display = 'none';
         camera.start();
-        // Initialize bubbles
-        for (let i = 0; i < 3; i++) createBubble();
     }, 500);
 });
