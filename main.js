@@ -157,20 +157,21 @@ function handleLeftHand(landmarks) {
             cursorLeft.style.transform = "translate(-50%, -50%) scale(0.6)";
         }
     } else if (open) {
+        // Restricted Paste: Only in targetArea
         if (clipboardBuffer && actionEl.innerText !== "PASTED!") {
             const activeEl = document.activeElement;
-            if (activeEl.classList.contains('text-editor')) {
+            if (activeEl === targetArea) {
                 activeEl.innerText += clipboardBuffer;
                 actionEl.innerText = "PASTED!";
                 cursorLeft.style.transform = "translate(-50%, -50%) scale(1.3)";
             }
         }
     } else if (snapping && !wasSnapping) {
-        // BACKSPACE
+        // Restricted Backspace: Only in targetArea
         const activeEl = document.activeElement;
-        if (activeEl && activeEl.classList.contains('text-editor')) {
+        if (activeEl === targetArea) {
             const selection = window.getSelection();
-            if (!selection.isCollapsed) {
+            if (!selection.isCollapsed && selection.anchorNode.parentElement === targetArea) {
                 selection.deleteFromDocument();
             } else {
                 activeEl.innerText = activeEl.innerText.slice(0, -1);
