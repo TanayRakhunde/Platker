@@ -153,9 +153,55 @@ function gameLoop() {
     if (isPlaying) requestAnimationFrame(gameLoop);
 }
 
-// Level Upload Logic (Simulation)
+// Level Upload & Camera Logic
 const fileInput = document.getElementById('file-input');
 const dropZone = document.getElementById('drop-zone');
+const cameraBtn = document.getElementById('camera-btn');
+const cameraModal = document.getElementById('camera-modal');
+const closeCamera = document.getElementById('close-camera');
+const captureBtn = document.getElementById('capture-btn');
+const video = document.getElementById('video');
+const captureCanvas = document.getElementById('capture-canvas');
+
+let stream = null;
+
+// Camera Handling
+cameraBtn.addEventListener('click', async () => {
+    try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: 'environment' }, 
+            audio: false 
+        });
+        video.srcObject = stream;
+        cameraModal.classList.remove('hidden');
+    } catch (err) {
+        console.error("Camera access denied:", err);
+        alert("Camera access is required to capture levels. Please check your permissions.");
+    }
+});
+
+function stopCamera() {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+    }
+    cameraModal.classList.add('hidden');
+}
+
+closeCamera.addEventListener('click', stopCamera);
+
+captureBtn.addEventListener('click', () => {
+    const ctx_capture = captureCanvas.getContext('2d');
+    captureCanvas.width = video.videoWidth;
+    captureCanvas.height = video.videoHeight;
+    ctx_capture.drawImage(video, 0, 0);
+    
+    captureCanvas.toBlob((blob) => {
+        const file = new File([blob], "captured_level.png", { type: "image/png" });
+        processImage(file);
+        stopCamera();
+    }, 'image/png');
+});
 
 fileInput.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -167,18 +213,21 @@ fileInput.addEventListener('change', (e) => {
 function processImage(file) {
     dropZone.innerHTML = `
         <div class="uploader-icon" style="animation: spin 2s linear infinite">✦</div>
-        <h3>Analyzing Drawing...</h3>
-        <p>Our AI is converting your sketch into a playable dimension.</p>
+        <h3>Analyzing Level...</h3>
+        <p>Our AI is converting your visual data into a playable dimension.</p>
     `;
     
+    // Scroll to drop zone to show progress
+    dropZone.scrollIntoView({ behavior: 'smooth' });
+
     // Simulate AI processing
     setTimeout(() => {
         // Generate random platforms based on "analysis"
         platforms = [
             { x: 0, y: 500, width: canvas.width, height: 40 },
-            { x: Math.random() * 200, y: 400, width: 150, height: 20 },
-            { x: Math.random() * 400 + 200, y: 300, width: 150, height: 20 },
-            { x: Math.random() * 100 + 500, y: 200, width: 150, height: 20 }
+            { x: Math.random() * (canvas.width - 200), y: 400, width: 150, height: 20 },
+            { x: Math.random() * (canvas.width - 200), y: 300, width: 150, height: 20 },
+            { x: Math.random() * (canvas.width - 200), y: 200, width: 150, height: 20 }
         ];
         
         dropZone.innerHTML = `
