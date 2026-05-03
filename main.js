@@ -116,7 +116,10 @@ function onResults(results) {
         statusText.innerText = 'ONLINE';
         
         results.multiHandLandmarks.forEach((landmarks, index) => {
-            const label = results.multiHandedness[index].label; // "Left" or "Right"
+            // MediaPipe labels are from the camera's perspective.
+            // We swap them here to match the user's physical perspective in a mirrored view.
+            const rawLabel = results.multiHandedness[index].label; 
+            const label = rawLabel === 'Right' ? 'Left' : 'Right';
             
             // Draw skeleton
             const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
