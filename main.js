@@ -24,6 +24,14 @@ let isRightPinching = false;
 let rightHandPos = { x: 0, y: 0 };
 let leftHandPos = { x: 0, y: 0 };
 
+// Click tracking
+let lastRightPinchTime = 0;
+let rightPinchCount = 0;
+const TRIPLE_CLICK_WINDOW = 600;
+
+// Snapping state
+let wasSnapping = false;
+
 // For selection
 let selectionAnchorRange = null;
 
@@ -33,7 +41,6 @@ function getDistance(p1, p2) {
 }
 
 function isFist(landmarks) {
-    // Check if fingers are folded: tip is closer to wrist than mid-joint
     const wrist = landmarks[0];
     const fingerTips = [8, 12, 16, 20];
     const fingerBases = [5, 9, 13, 17];
@@ -44,11 +51,10 @@ function isFist(landmarks) {
         const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
         if (tipDist < baseDist) foldedCount++;
     }
-    return foldedCount >= 3; // Fist if at least 3 fingers are folded
+    return foldedCount >= 3;
 }
 
 function isOpen(landmarks) {
-    // Check if fingers are extended: tip is significantly further from wrist than base
     const wrist = landmarks[0];
     const fingerTips = [8, 12, 16, 20];
     const fingerBases = [5, 9, 13, 17];
@@ -59,7 +65,12 @@ function isOpen(landmarks) {
         const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
         if (tipDist > baseDist * 1.3) extendedCount++;
     }
-    return extendedCount >= 3; // Open if at least 3 fingers are extended
+    return extendedCount >= 3;
+}
+
+function isSnapping(landmarks) {
+    // Snap: Thumb (4) touches Middle Finger (12)
+    return getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
 }
 
 // --- INTERACTION ---
@@ -67,7 +78,6 @@ function handleRightHand(landmarks, isPinching) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
     
-    // STICKY CURSOR: Reduce smoothing factor while pinching to "lock" onto text and prevent jitter
     const currentLerp = isPinching ? 0.08 : 0.3;
     rightHandPos.x += (targetX - rightHandPos.x) * currentLerp;
     rightHandPos.y += (targetY - rightHandPos.y) * currentLerp;
@@ -76,29 +86,46 @@ function handleRightHand(landmarks, isPinching) {
     cursorRight.style.top = `${rightHandPos.y}px`;
     cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.7 : 1})`;
 
-    // ADVANCED SELECTION LOGIC
     if (isPinching) {
         const sel = window.getSelection();
         const range = document.caretRangeFromPoint(rightHandPos.x, rightHandPos.y);
         
         if (range) {
             if (!isRightPinching) {
-                // START PINCH: Set anchor
-                selectionAnchorRange = range.cloneRange();
-                sel.removeAllRanges();
+                // Triple Click Detection
+                const now = performance.now();
+                if (now - lastRightPinchTime < TRIPLE_CLICK_WINDOW) {
+                    rightPinchCount++;
+                } else {
+                    rightPinchCount = 1;
+                }
+                lastRightPinchTime = now;
+
+                if (rightPinchCount >= 3) {
+                    // SELECT ALL
+                    const activeEl = document.activeElement;
+                    if (activeEl && activeEl.classList.contains('text-editor')) {
+                        const newRange = document.createRange();
+                        newRange.selectNodeContents(activeEl);
+                        sel.removeAllRanges();
+                        sel.addRange(newRange);
+                        actionEl.innerText = "SELECT ALL";
+                    }
+                    rightPinchCount = 0;
+                } else {
+                    selectionAnchorRange = range.cloneRange();
+                    sel.removeAllRanges();
+                }
             } else {
-                // DRAGGING PINCH: Expand selection
+                // Dragging selection
                 const newRange = document.createRange();
-                
-                // Determine direction to set start/end correctly
-                if (selectionAnchorRange.compareBoundaryPoints(Range.START_TO_START, range) <= 0) {
+                if (selectionAnchorRange && selectionAnchorRange.compareBoundaryPoints(Range.START_TO_START, range) <= 0) {
                     newRange.setStart(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
                     newRange.setEnd(range.startContainer, range.startOffset);
-                } else {
+                } else if (selectionAnchorRange) {
                     newRange.setStart(range.startContainer, range.startOffset);
                     newRange.setEnd(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
                 }
-                
                 sel.removeAllRanges();
                 sel.addRange(newRange);
             }
@@ -120,9 +147,9 @@ function handleLeftHand(landmarks) {
 
     const fist = isFist(landmarks);
     const open = isOpen(landmarks);
+    const snapping = isSnapping(landmarks);
 
     if (fist) {
-        // Copy action from selection
         const selection = window.getSelection().toString();
         if (selection && selection.length > 0) {
             clipboardBuffer = selection;
@@ -130,7 +157,6 @@ function handleLeftHand(landmarks) {
             cursorLeft.style.transform = "translate(-50%, -50%) scale(0.6)";
         }
     } else if (open) {
-        // Paste action into focused element or target area
         if (clipboardBuffer && actionEl.innerText !== "PASTED!") {
             const activeEl = document.activeElement;
             if (activeEl.classList.contains('text-editor')) {
@@ -139,12 +165,26 @@ function handleLeftHand(landmarks) {
                 cursorLeft.style.transform = "translate(-50%, -50%) scale(1.3)";
             }
         }
+    } else if (snapping && !wasSnapping) {
+        // BACKSPACE
+        const activeEl = document.activeElement;
+        if (activeEl && activeEl.classList.contains('text-editor')) {
+            const selection = window.getSelection();
+            if (!selection.isCollapsed) {
+                selection.deleteFromDocument();
+            } else {
+                activeEl.innerText = activeEl.innerText.slice(0, -1);
+            }
+            actionEl.innerText = "DELETE";
+            cursorLeft.style.transform = "translate(-50%, -50%) rotate(-45deg)";
+        }
     } else {
-        if (actionEl.innerText !== "IDLE") {
+        if (actionEl.innerText !== "IDLE" && !snapping) {
             setTimeout(() => actionEl.innerText = "IDLE", 1000);
         }
         cursorLeft.style.transform = "translate(-50%, -50%) scale(1)";
     }
+    wasSnapping = snapping;
 }
 
 // --- MEDIAPIPE LOGIC ---
