@@ -473,9 +473,41 @@ function onResults(results) {
         results.multiHandLandmarks.forEach((landmarks, index) => {
             const label = results.multiHandedness[index].label === 'Right' ? 'Left' : 'Right';
             currentHandLandmarks = landmarks;
-            const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
-            drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {color: color, lineWidth: 2});
-            drawLandmarks(canvasCtx, landmarks, {color: '#fff', lineWidth: 1, radius: 2});
+            const primaryColor = label === 'Right' ? '#00f2ff' : '#ff00ff';
+            const secondaryColor = '#ffffff';
+
+            // Draw High-Density Skeleton
+            drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {
+                color: primaryColor,
+                lineWidth: 3
+            });
+
+            // Draw Primary Data Nodes (The 21 Joints)
+            drawLandmarks(canvasCtx, landmarks, {
+                color: primaryColor,
+                lineWidth: 1,
+                radius: 4
+            });
+
+            // --- HIGH-DENSITY INTERPOLATION (Peak Performance Dots) ---
+            // We add interpolated dots between major joints to create a dense mesh look
+            Hands.HAND_CONNECTIONS.forEach(([startIdx, endIdx]) => {
+                const start = landmarks[startIdx];
+                const end = landmarks[endIdx];
+                
+                // Add a "Sub-Node" at the 50% mark
+                const midX = (start.x + end.x) / 2;
+                const midY = (start.y + end.y) / 2;
+                
+                canvasCtx.fillStyle = secondaryColor;
+                canvasCtx.beginPath();
+                canvasCtx.arc(midX * canvasElement.width, midY * canvasElement.height, 1.5, 0, 2 * Math.PI);
+                canvasCtx.fill();
+                
+                // Add "Glow" to nodes
+                canvasCtx.shadowBlur = 10;
+                canvasCtx.shadowColor = primaryColor;
+            });
             
             const customMatch = matchGesture(landmarks);
             if (customMatch) actionEl.innerText = customMatch;
@@ -492,7 +524,12 @@ function onResults(results) {
 }
 
 const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
-hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
+hands.setOptions({ 
+    maxNumHands: 2, 
+    modelComplexity: 1, 
+    minDetectionConfidence: 0.8, // Peak Accuracy
+    minTrackingConfidence: 0.8  // Peak Stability
+});
 hands.onResults(onResults);
 
 // Initialization
