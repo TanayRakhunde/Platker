@@ -1,5 +1,4 @@
 import { Hands } from '@mediapipe/hands';
-import { Camera } from '@mediapipe/camera_utils';
 import { drawConnectors, drawLandmarks } from '@mediapipe/drawing_utils';
 
 const videoElement = document.getElementById('input_video');
@@ -366,18 +365,21 @@ const cameraSelect = document.getElementById('camera-select');
 
 async function getCameras() {
     try {
-        // Request permission if needed to see labels
-        await navigator.mediaDevices.getUserMedia({ video: true }); 
+        // Request permission to see labels, then immediately release
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true }); 
         const devices = await navigator.mediaDevices.enumerateDevices();
+        
+        // STOP the temporary stream so the camera isn't "Busy"
+        stream.getTracks().forEach(track => track.stop());
+
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
         
-        // Sort: USB/External first, Virtual (OBS/Snap) last
         const sortedDevices = videoDevices.sort((a, b) => {
-            const aLabel = a.label.toLowerCase();
-            const bLabel = b.label.toLowerCase();
+            const aLabel = (a.label || "").toLowerCase();
+            const bLabel = (b.label || "").toLowerCase();
             
-            const isAUsb = aLabel.includes('usb') || aLabel.includes('external');
-            const isBUsb = bLabel.includes('usb') || bLabel.includes('external');
+            const isAUsb = aLabel.includes('usb') || aLabel.includes('external') || aLabel.includes('cam');
+            const isBUsb = bLabel.includes('usb') || bLabel.includes('external') || bLabel.includes('cam');
             const isAVirtual = aLabel.includes('obs') || aLabel.includes('virtual');
             const isBVirtual = bLabel.includes('obs') || bLabel.includes('virtual');
 
@@ -397,12 +399,10 @@ async function getCameras() {
             `<option value="${d.deviceId}">${d.label || `Camera ${videoDevices.indexOf(d) + 1}`}</option>`
         ).join('');
 
-        // Auto-select the best (first) camera
         cameraSelect.selectedIndex = 0;
-
     } catch (e) {
-        console.error("Camera enumeration failed", e);
-        cameraSelect.innerHTML = '<option value="">Permission Denied</option>';
+        console.error("HandOS: Camera scan failed", e);
+        cameraSelect.innerHTML = '<option value="">Camera Blocked / Not Found</option>';
     }
 }
 
