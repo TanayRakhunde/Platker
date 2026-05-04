@@ -50,12 +50,17 @@ let lastRightPinchTime = 0;
 let rightPinchCount = 0;
 const TRIPLE_CLICK_WINDOW = 600;
 let selectionAnchorRange = null;
+
+// Left Hand States
+let wasFist = false;
+let wasOpen = false;
 let wasSnapping = false;
 
 // --- GESTURE LAB LOGIC ---
 
 function getDistance(p1, p2) {
-    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
+    if (!p1 || !p2) return 100;
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + (p1.z && p2.z ? Math.pow(p1.z - p2.z, 2) : 0));
 }
 
 function getFeatureVector(landmarks) {
@@ -296,10 +301,6 @@ function handleRightHand(landmarks, isPinching) {
     isRightPinching = isPinching;
 }
 
-let wasFist = false;
-let wasOpen = false;
-let wasSnapping = false;
-
 function handleLeftHand(landmarks) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
@@ -312,39 +313,30 @@ function handleLeftHand(landmarks) {
     const open = isOpen(landmarks);
     const snapping = getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
 
-    // --- EDGE TRIGGERED LOGIC (FIRE ONCE PER GESTURE) ---
-
-    // 1. SNAP (DELETE) - Highest Priority
     if (snapping && !wasSnapping) {
         if (document.activeElement === targetArea) {
             const selection = window.getSelection();
             if (!selection.isCollapsed) selection.deleteFromDocument();
             else targetArea.innerText = targetArea.innerText.slice(0, -1);
             actionEl.innerText = "DELETE";
-            console.log("HandOS: Snap Delete Triggered");
         }
     }
 
-    // 2. FIST (COPY) - Only if not snapping
     if (fist && !wasFist && !snapping) {
         const selection = window.getSelection().toString();
         if (selection) {
             clipboardBuffer = selection;
             actionEl.innerText = "COPIED!";
-            console.log("HandOS: Copy Triggered");
         }
     }
 
-    // 3. OPEN (PASTE) - Only if not snapping and was previously closed
     if (open && !wasOpen && !fist && !snapping) {
         if (clipboardBuffer && document.activeElement === targetArea) {
             targetArea.innerText += clipboardBuffer;
             actionEl.innerText = "PASTED!";
-            console.log("HandOS: Paste Triggered");
         }
     }
 
-    // Reset Action Label
     if (!fist && !open && !snapping) {
         if (actionEl.innerText !== "IDLE" && actionEl.innerText !== "ONLINE") {
             setTimeout(() => {
@@ -353,7 +345,6 @@ function handleLeftHand(landmarks) {
         }
     }
 
-    // Store states for next frame
     wasFist = fist;
     wasOpen = open;
     wasSnapping = snapping;
@@ -365,24 +356,18 @@ const cameraSelect = document.getElementById('camera-select');
 
 async function getCameras() {
     try {
-        // Request permission to see labels, then immediately release
         const stream = await navigator.mediaDevices.getUserMedia({ video: true }); 
         const devices = await navigator.mediaDevices.enumerateDevices();
-        
-        // STOP the temporary stream so the camera isn't "Busy"
         stream.getTracks().forEach(track => track.stop());
 
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
-        
         const sortedDevices = videoDevices.sort((a, b) => {
             const aLabel = (a.label || "").toLowerCase();
             const bLabel = (b.label || "").toLowerCase();
-            
             const isAUsb = aLabel.includes('usb') || aLabel.includes('external') || aLabel.includes('cam');
             const isBUsb = bLabel.includes('usb') || bLabel.includes('external') || bLabel.includes('cam');
             const isAVirtual = aLabel.includes('obs') || aLabel.includes('virtual');
             const isBVirtual = bLabel.includes('obs') || bLabel.includes('virtual');
-
             if (isAUsb && !isBUsb) return -1;
             if (!isAUsb && isBUsb) return 1;
             if (isAVirtual && !isBVirtual) return 1;
@@ -390,15 +375,9 @@ async function getCameras() {
             return 0;
         });
 
-        if (sortedDevices.length === 0) {
-            cameraSelect.innerHTML = '<option value="">No Camera Found</option>';
-            return;
-        }
-
         cameraSelect.innerHTML = sortedDevices.map(d => 
             `<option value="${d.deviceId}">${d.label || `Camera ${videoDevices.indexOf(d) + 1}`}</option>`
         ).join('');
-
         cameraSelect.selectedIndex = 0;
     } catch (e) {
         console.error("HandOS: Camera scan failed", e);
@@ -406,11 +385,7 @@ async function getCameras() {
     }
 }
 
-// Listen for hardware changes (Plug/Unplug)
-navigator.mediaDevices.addEventListener('devicechange', () => {
-    console.log("HandOS: Hardware Change Detected...");
-    getCameras();
-});
+navigator.mediaDevices.addEventListener('devicechange', getCameras);
 
 let activeStream = null;
 
@@ -419,15 +394,11 @@ async function startCamera(deviceId) {
         activeStream.getTracks().forEach(track => track.stop());
     }
 
-    console.log(`HandOS: Requesting stream for device: ${deviceId || 'default'}`);
-
-    // Flexible constraints to support more USB cameras
     const constraints = {
         video: {
             deviceId: deviceId ? { exact: deviceId } : undefined,
             width: { ideal: 1280 },
-            height: { ideal: 720 },
-            frameRate: { ideal: 30 }
+            height: { ideal: 720 }
         }
     };
 
@@ -435,28 +406,27 @@ async function startCamera(deviceId) {
         activeStream = await navigator.mediaDevices.getUserMedia(constraints);
         videoElement.srcObject = activeStream;
         
-        // Wait for metadata to ensure video dimensions are known
+        // Use a simpler play sequence
         videoElement.onloadedmetadata = () => {
-            console.log("HandOS: Camera Metadata Loaded. Starting Sensors...");
-            videoElement.play();
-            requestAnimationFrame(processFrame);
+            videoElement.play().then(() => {
+                console.log("HandOS: Stream Active");
+                requestAnimationFrame(processFrame);
+            });
         };
-        
     } catch (e) {
-        console.error("HandOS: Critical Sensor Error", e);
-        // Fallback to default if exact deviceId failed
-        if (deviceId) {
-            console.warn("HandOS: Specific device failed, trying fallback to any camera...");
-            startCamera(null); 
-        } else {
-            statusText.innerText = "ERROR: SENSOR BLOCKED";
-        }
+        console.error("HandOS: Camera failed", e);
+        if (deviceId) startCamera(null); 
+        else statusText.innerText = "ERROR: SENSOR BLOCKED";
     }
 }
 
 async function processFrame() {
     if (!activeStream || videoElement.paused || videoElement.ended) return;
-    await hands.send({ image: videoElement });
+    try {
+        await hands.send({ image: videoElement });
+    } catch (e) {
+        console.warn("HandOS: AI Processing Frame Skip", e);
+    }
     requestAnimationFrame(processFrame);
 }
 
@@ -509,11 +479,8 @@ navBtns.forEach(btn => {
 
 captureBtn.addEventListener('click', () => saveGesture('pose'));
 recordBtn.addEventListener('click', startMotionRecording);
-
 startBtn.addEventListener('click', () => {
     const deviceId = cameraSelect.value;
-    console.log(`HandOS: Launching Sensor (${deviceId})...`);
-    
     startOverlay.style.opacity = '0';
     setTimeout(() => {
         startOverlay.style.display = 'none';
@@ -521,6 +488,5 @@ startBtn.addEventListener('click', () => {
     }, 500);
 });
 
-// Load camera list on boot
 getCameras();
 renderGestureList();
