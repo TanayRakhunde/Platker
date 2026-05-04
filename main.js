@@ -44,9 +44,20 @@ const BUFFER_SIZE = 40;
 
 // Action Control
 let lastActionTime = 0;
-const ACTION_COOLDOWN = 1500; // 1.5s between custom actions
+const ACTION_COOLDOWN = 1500; 
+
+// Selection tracking
+let lastRightPinchTime = 0;
+let rightPinchCount = 0;
+const TRIPLE_CLICK_WINDOW = 600;
+let selectionAnchorRange = null;
+let wasSnapping = false;
 
 // --- GESTURE LAB LOGIC ---
+
+function getDistance(p1, p2) {
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
+}
 
 function getFeatureVector(landmarks) {
     const wrist = landmarks[0];
@@ -124,10 +135,7 @@ function updateGestureCommand(index, command) {
 
 function saveGesture(type = 'pose') {
     const name = gestureNameInput.value.trim().toUpperCase();
-    if (!name) {
-        alert("Enter a name!");
-        return;
-    }
+    if (!name) return;
     
     if (type === 'pose') {
         if (!currentHandLandmarks) return;
@@ -145,6 +153,7 @@ function saveGesture(type = 'pose') {
 }
 
 function renderGestureList() {
+    if (!gestureListEl) return;
     if (gestureLibrary.length === 0) {
         gestureListEl.innerHTML = '<p class="empty-msg">No custom gestures yet.</p>';
         return;
@@ -159,7 +168,7 @@ function renderGestureList() {
             <div class="command-mapping">
                 <input type="text" 
                        class="command-input" 
-                       placeholder="AI Command (e.g. open google.com)" 
+                       placeholder="AI Command" 
                        value="${g.command || ''}"
                        onchange="updateGestureCommand(${i}, this.value)">
                 <button class="delete-btn" onclick="removeGesture(${i})">DELETE</button>
@@ -195,18 +204,13 @@ function matchGesture(landmarks) {
         } else if (gesture.type === 'motion' && liveBuffer.length >= 10) {
             const lastSavedFrame = gesture.sequence[gesture.sequence.length - 1];
             const firstSavedFrame = gesture.sequence[0];
-            
             let distEnd = calculateVectorDistance(vector, lastSavedFrame);
             let distStart = calculateVectorDistance(liveBuffer[0], firstSavedFrame);
-            
-            if (distEnd < 0.1 && distStart < 0.15) {
-                bestMatch = gesture;
-            }
+            if (distEnd < 0.1 && distStart < 0.15) bestMatch = gesture;
         }
     });
 
     if (bestMatch) {
-        // Debounced execution
         const now = Date.now();
         if (now - lastActionTime > ACTION_COOLDOWN) {
             executeCommand(bestMatch.command);
@@ -214,114 +218,18 @@ function matchGesture(landmarks) {
         }
         return bestMatch.name;
     }
-
     return null;
 }
 
-// Tab Switching
-navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        navBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
-        
-        btn.classList.add('active');
-        const tabId = `tab-${btn.dataset.tab}`;
-        document.getElementById(tabId).classList.add('active');
-    });
-});
-
-captureBtn.addEventListener('click', () => saveGesture('pose'));
-recordBtn.addEventListener('click', startMotionRecording);
-renderGestureList();
-
-window.updateGestureCommand = updateGestureCommand;
-window.removeGesture = (index) => {
-    gestureLibrary.splice(index, 1);
-    localStorage.setItem('handos_gestures', JSON.stringify(gestureLibrary));
-    renderGestureList();
-};
-
-function matchGesture(landmarks) {
-    const vector = getFeatureVector(landmarks);
-    if (!vector) return null;
-
-    liveBuffer.push(vector);
-    if (liveBuffer.length > BUFFER_SIZE) liveBuffer.shift();
-
-    let bestMatch = null;
-    let minDistance = 0.12;
-
-    gestureLibrary.forEach(gesture => {
-        if (gesture.type === 'pose') {
-            let dist = calculateVectorDistance(vector, gesture.vector);
-            if (dist < minDistance) {
-                minDistance = dist;
-                bestMatch = gesture;
-            }
-        } else if (gesture.type === 'motion' && liveBuffer.length >= 10) {
-            const lastSavedFrame = gesture.sequence[gesture.sequence.length - 1];
-            const firstSavedFrame = gesture.sequence[0];
-            
-            let distEnd = calculateVectorDistance(vector, lastSavedFrame);
-            let distStart = calculateVectorDistance(liveBuffer[0], firstSavedFrame);
-            
-            if (distEnd < 0.1 && distStart < 0.15) {
-                bestMatch = gesture;
-            }
-        }
-    });
-
-    if (bestMatch) {
-        // Debounced execution
-        const now = Date.now();
-        if (now - lastActionTime > ACTION_COOLDOWN) {
-            executeCommand(bestMatch.command);
-            lastActionTime = now;
-        }
-        return bestMatch.name;
-    }
-
-    return null;
-}
-
-function calculateVectorDistance(v1, v2) {
-    let distance = 0;
-    for (let i = 0; i < v1.length; i++) {
-        distance += Math.abs(v1[i] - v2[i]);
-    }
-    return distance / v1.length;
-}
-
-// Tab Switching
-navBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-        navBtns.forEach(b => b.classList.remove('active'));
-        tabContents.forEach(c => c.classList.remove('active'));
-        
-        btn.classList.add('active');
-        const tabId = `tab-${btn.dataset.tab}`;
-        document.getElementById(tabId).classList.add('active');
-    });
-});
-
-captureBtn.addEventListener('click', () => saveGesture('pose'));
-recordBtn.addEventListener('click', startMotionRecording);
-renderGestureList();
-// --- GESTURE UTILS ---
-function getDistance(p1, p2) {
-    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2) + Math.pow(p1.z - p2.z, 2));
-}
+// --- INTERACTION LOGIC ---
 
 function isFist(landmarks) {
     const wrist = landmarks[0];
     const fingerTips = [8, 12, 16, 20];
     const fingerBases = [5, 9, 13, 17];
-    
     let foldedCount = 0;
     for (let i = 0; i < 4; i++) {
-        const tipDist = getDistance(wrist, landmarks[fingerTips[i]]);
-        const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
-        if (tipDist < baseDist) foldedCount++;
+        if (getDistance(wrist, landmarks[fingerTips[i]]) < getDistance(wrist, landmarks[fingerBases[i]])) foldedCount++;
     }
     return foldedCount >= 3;
 }
@@ -330,26 +238,16 @@ function isOpen(landmarks) {
     const wrist = landmarks[0];
     const fingerTips = [8, 12, 16, 20];
     const fingerBases = [5, 9, 13, 17];
-    
     let extendedCount = 0;
     for (let i = 0; i < 4; i++) {
-        const tipDist = getDistance(wrist, landmarks[fingerTips[i]]);
-        const baseDist = getDistance(wrist, landmarks[fingerBases[i]]);
-        if (tipDist > baseDist * 1.3) extendedCount++;
+        if (getDistance(wrist, landmarks[fingerTips[i]]) > getDistance(wrist, landmarks[fingerBases[i]]) * 1.3) extendedCount++;
     }
     return extendedCount >= 3;
 }
 
-function isSnapping(landmarks) {
-    // Snap: Thumb (4) touches Middle Finger (12)
-    return getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
-}
-
-// --- INTERACTION ---
 function handleRightHand(landmarks, isPinching) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
-    
     const currentLerp = isPinching ? 0.08 : 0.3;
     rightHandPos.x += (targetX - rightHandPos.x) * currentLerp;
     rightHandPos.y += (targetY - rightHandPos.y) * currentLerp;
@@ -361,20 +259,14 @@ function handleRightHand(landmarks, isPinching) {
     if (isPinching) {
         const sel = window.getSelection();
         const range = document.caretRangeFromPoint(rightHandPos.x, rightHandPos.y);
-        
         if (range) {
             if (!isRightPinching) {
-                // Triple Click Detection
                 const now = performance.now();
-                if (now - lastRightPinchTime < TRIPLE_CLICK_WINDOW) {
-                    rightPinchCount++;
-                } else {
-                    rightPinchCount = 1;
-                }
+                if (now - lastRightPinchTime < TRIPLE_CLICK_WINDOW) rightPinchCount++;
+                else rightPinchCount = 1;
                 lastRightPinchTime = now;
 
                 if (rightPinchCount >= 3) {
-                    // SELECT ALL
                     const activeEl = document.activeElement;
                     if (activeEl && activeEl.classList.contains('text-editor')) {
                         const newRange = document.createRange();
@@ -388,13 +280,12 @@ function handleRightHand(landmarks, isPinching) {
                     selectionAnchorRange = range.cloneRange();
                     sel.removeAllRanges();
                 }
-            } else {
-                // Dragging selection
+            } else if (selectionAnchorRange) {
                 const newRange = document.createRange();
-                if (selectionAnchorRange && selectionAnchorRange.compareBoundaryPoints(Range.START_TO_START, range) <= 0) {
+                if (selectionAnchorRange.compareBoundaryPoints(Range.START_TO_START, range) <= 0) {
                     newRange.setStart(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
                     newRange.setEnd(range.startContainer, range.startOffset);
-                } else if (selectionAnchorRange) {
+                } else {
                     newRange.setStart(range.startContainer, range.startOffset);
                     newRange.setEnd(selectionAnchorRange.startContainer, selectionAnchorRange.startOffset);
                 }
@@ -403,69 +294,101 @@ function handleRightHand(landmarks, isPinching) {
             }
         }
     }
-    
     isRightPinching = isPinching;
 }
 
 function handleLeftHand(landmarks) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
-    
     leftHandPos.x += (targetX - leftHandPos.x) * 0.3;
     leftHandPos.y += (targetY - leftHandPos.y) * 0.3;
-    
     cursorLeft.style.left = `${leftHandPos.x}px`;
     cursorLeft.style.top = `${leftHandPos.y}px`;
 
     const fist = isFist(landmarks);
     const open = isOpen(landmarks);
-    const snapping = isSnapping(landmarks);
+    const snapping = getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
 
     if (fist) {
         const selection = window.getSelection().toString();
-        if (selection && selection.length > 0) {
+        if (selection) {
             clipboardBuffer = selection;
             actionEl.innerText = "COPIED!";
-            cursorLeft.style.transform = "translate(-50%, -50%) scale(0.6)";
         }
     } else if (open) {
-        // Restricted Paste: Only in targetArea
-        if (clipboardBuffer && actionEl.innerText !== "PASTED!") {
-            const activeEl = document.activeElement;
-            if (activeEl === targetArea) {
-                activeEl.innerText += clipboardBuffer;
-                actionEl.innerText = "PASTED!";
-                cursorLeft.style.transform = "translate(-50%, -50%) scale(1.3)";
-            }
+        if (clipboardBuffer && document.activeElement === targetArea && actionEl.innerText !== "PASTED!") {
+            targetArea.innerText += clipboardBuffer;
+            actionEl.innerText = "PASTED!";
         }
     } else if (snapping && !wasSnapping) {
-        // Restricted Backspace: Only in targetArea
-        const activeEl = document.activeElement;
-        if (activeEl === targetArea) {
+        if (document.activeElement === targetArea) {
             const selection = window.getSelection();
-            if (!selection.isCollapsed && selection.anchorNode.parentElement === targetArea) {
-                selection.deleteFromDocument();
-            } else {
-                activeEl.innerText = activeEl.innerText.slice(0, -1);
-            }
+            if (!selection.isCollapsed) selection.deleteFromDocument();
+            else targetArea.innerText = targetArea.innerText.slice(0, -1);
             actionEl.innerText = "DELETE";
-            cursorLeft.style.transform = "translate(-50%, -50%) rotate(-45deg)";
         }
-    } else {
-        if (actionEl.innerText !== "IDLE" && !snapping) {
-            setTimeout(() => actionEl.innerText = "IDLE", 1000);
-        }
-        cursorLeft.style.transform = "translate(-50%, -50%) scale(1)";
+    } else if (!snapping) {
+        if (actionEl.innerText !== "IDLE") setTimeout(() => actionEl.innerText = "IDLE", 1000);
     }
     wasSnapping = snapping;
 }
 
-// --- MEDIAPIPE LOGIC ---
+// --- SYSTEM SETUP ---
+
+const cameraSelect = document.getElementById('camera-select');
+
+async function getCameras() {
+    try {
+        await navigator.mediaDevices.getUserMedia({ video: true }); // Trigger permission
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(d => d.kind === 'videoinput');
+        
+        cameraSelect.innerHTML = videoDevices.map(d => 
+            `<option value="${d.deviceId}">${d.label || `Camera ${videoDevices.indexOf(d) + 1}`}</option>`
+        ).join('');
+    } catch (e) {
+        console.error("Camera enumeration failed", e);
+        cameraSelect.innerHTML = '<option value="">Permission Denied</option>';
+    }
+}
+
+let activeStream = null;
+
+async function startCamera(deviceId) {
+    if (activeStream) {
+        activeStream.getTracks().forEach(track => track.stop());
+    }
+
+    const constraints = {
+        video: {
+            deviceId: deviceId ? { exact: deviceId } : undefined,
+            width: 1280,
+            height: 720
+        }
+    };
+
+    try {
+        activeStream = await navigator.mediaDevices.getUserMedia(constraints);
+        videoElement.srcObject = activeStream;
+        videoElement.play();
+        
+        requestAnimationFrame(processFrame);
+    } catch (e) {
+        console.error("Failed to start camera", e);
+        statusText.innerText = "ERROR: SENSOR BLOCKED";
+    }
+}
+
+async function processFrame() {
+    if (!activeStream || videoElement.paused || videoElement.ended) return;
+    await hands.send({ image: videoElement });
+    requestAnimationFrame(processFrame);
+}
+
 function onResults(results) {
     const rect = canvasElement.parentElement.getBoundingClientRect();
     canvasElement.width = rect.width;
     canvasElement.height = rect.height;
-
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     canvasCtx.scale(-1, 1);
@@ -474,32 +397,19 @@ function onResults(results) {
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         statusText.innerText = 'ONLINE';
-        
         results.multiHandLandmarks.forEach((landmarks, index) => {
-            const rawLabel = results.multiHandedness[index].label; 
-            const label = rawLabel === 'Right' ? 'Left' : 'Right';
-            
-            // Cache for Lab
+            const label = results.multiHandedness[index].label === 'Right' ? 'Left' : 'Right';
             currentHandLandmarks = landmarks;
-
-            // Draw skeleton
             const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {color: color, lineWidth: 2});
             drawLandmarks(canvasCtx, landmarks, {color: '#fff', lineWidth: 1, radius: 2});
             
-            // CUSTOM GESTURE MATCHING
             const customMatch = matchGesture(landmarks);
-            if (customMatch) {
-                actionEl.innerText = customMatch;
-            }
+            if (customMatch) actionEl.innerText = customMatch;
 
             const isPinching = getDistance(landmarks[4], landmarks[8]) < PINCH_THRESHOLD;
-
-            if (label === 'Right') {
-                handleRightHand(landmarks, isPinching);
-            } else {
-                handleLeftHand(landmarks);
-            }
+            if (label === 'Right') handleRightHand(landmarks, isPinching);
+            else handleLeftHand(landmarks);
         });
     } else {
         statusText.innerText = 'OFFLINE';
@@ -508,40 +418,34 @@ function onResults(results) {
     canvasCtx.restore();
 }
 
-const hands = new Hands({
-    locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-    }
-});
-
-hands.setOptions({
-    maxNumHands: 2,
-    modelComplexity: 1,
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.7
-});
-
+const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
+hands.setOptions({ maxNumHands: 2, modelComplexity: 1, minDetectionConfidence: 0.7, minTrackingConfidence: 0.7 });
 hands.onResults(onResults);
 
-// --- CAMERA SETUP ---
-const camera = new Camera(videoElement, {
-    onFrame: async () => {
-        await hands.send({ image: videoElement });
-    },
-    width: 1280,
-    height: 720
+// Initialization
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        navBtns.forEach(b => b.classList.remove('active'));
+        tabContents.forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+    });
 });
 
+captureBtn.addEventListener('click', () => saveGesture('pose'));
+recordBtn.addEventListener('click', startMotionRecording);
+
 startBtn.addEventListener('click', () => {
-    console.log("HandOS: Initializing Sensors...");
+    const deviceId = cameraSelect.value;
+    console.log(`HandOS: Launching Sensor (${deviceId})...`);
+    
     startOverlay.style.opacity = '0';
     setTimeout(() => {
         startOverlay.style.display = 'none';
-        camera.start().then(() => {
-            console.log("HandOS: Camera Started Successfully");
-        }).catch(err => {
-            console.error("HandOS: Camera Failed", err);
-            statusText.innerText = "ERROR: CAMERA BLOCKED";
-        });
+        startCamera(deviceId);
     }, 500);
 });
+
+// Load camera list on boot
+getCameras();
+renderGestureList();

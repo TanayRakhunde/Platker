@@ -92,8 +92,15 @@
         <!-- Start Overlay -->
         <div id="start-overlay">
             <div class="menu-card">
-                <h2>AI Vision Interface</h2>
                 <p>Allow camera access to transform your hand into a digital controller.</p>
+                
+                <div class="camera-selector-group">
+                    <label>SELECT SENSOR SOURCE</label>
+                    <select id="camera-select" class="camera-select">
+                        <option value="">Detecting Cameras...</option>
+                    </select>
+                </div>
+
                 <button class="btn btn-primary" id="start-btn">ENABLE SENSORS</button>
             </div>
         </div>

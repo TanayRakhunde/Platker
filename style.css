@@ -162,12 +162,10 @@ body {
     display: flex;
     flex-direction: column;
     gap: 2rem;
-    pointer-events: auto; /* Allow interaction */
+    pointer-events: auto;
 }
 
-.motion-btn {
-    background: #ffaa00;
-}
+.motion-btn { background: #ffaa00; }
 
 #record-progress-container {
     width: 100%;
@@ -202,20 +200,10 @@ body {
 
 .hidden { display: none !important; }
 
-.lab-header h2 {
-    font-size: 1.5rem;
-    letter-spacing: 4px;
-}
+.lab-header h2 { font-size: 1.5rem; letter-spacing: 4px; }
+.lab-header span { color: var(--lab-accent); }
 
-.lab-header span {
-    color: var(--lab-accent);
-}
-
-.lab-controls {
-    display: flex;
-    gap: 1rem;
-}
-
+.lab-controls { display: flex; gap: 1rem; }
 .lab-controls input {
     flex: 1;
     background: rgba(255, 255, 255, 0.05);
@@ -242,17 +230,8 @@ body {
     transform: translateY(-2px);
 }
 
-.gesture-library {
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    padding-top: 2rem;
-}
-
-.gesture-list {
-    margin-top: 1rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-}
+.gesture-library { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 2rem; }
+.gesture-list { margin-top: 1rem; display: flex; flex-direction: column; gap: 1rem; }
 
 .gesture-item {
     width: 100%;
@@ -271,12 +250,7 @@ body {
     border-color: var(--lab-accent);
 }
 
-.gesture-info {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
+.gesture-info { display: flex; justify-content: space-between; align-items: center; }
 .gesture-type-tag {
     font-size: 0.6rem;
     font-weight: 800;
@@ -285,11 +259,7 @@ body {
     background: rgba(255, 255, 255, 0.1);
 }
 
-.command-mapping {
-    display: flex;
-    gap: 1rem;
-}
-
+.command-mapping { display: flex; gap: 1rem; }
 .command-input {
     flex: 1;
     background: rgba(0, 0, 0, 0.2);
@@ -302,10 +272,6 @@ body {
     outline: none;
 }
 
-.command-input::placeholder {
-    color: rgba(255, 255, 255, 0.2);
-}
-
 .delete-btn {
     background: rgba(255, 0, 0, 0.1);
     color: #ff4444;
@@ -315,31 +281,10 @@ body {
     cursor: pointer;
 }
 
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.logo {
-    font-size: 1.5rem;
-    font-weight: 800;
-    letter-spacing: 2px;
-}
-
-.logo span {
-    color: var(--primary);
-}
-
-.status {
-    background: rgba(255, 255, 255, 0.05);
-    padding: 0.5rem 1rem;
-    border-radius: 50px;
-    font-size: 0.8rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: var(--primary);
-    box-shadow: 0 0 10px var(--accent-glow);
-}
+/* Desktop UI */
+header { display: flex; justify-content: space-between; align-items: center; }
+.logo { font-size: 1.5rem; font-weight: 800; letter-spacing: 2px; }
+.logo span { color: var(--primary); }
 
 #game-container {
     flex: 1;
@@ -358,12 +303,7 @@ header {
     pointer-events: auto;
 }
 
-.input-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
-
+.input-group { display: flex; flex-direction: column; gap: 0.5rem; }
 .input-group label {
     font-size: 0.7rem;
     font-weight: 800;
@@ -397,11 +337,6 @@ header {
     color: rgba(255, 255, 255, 0.2);
 }
 
-.text-editor::selection {
-    background: var(--primary);
-    color: #000;
-}
-
 /* Hand Cursors */
 .hand-cursor {
     position: absolute;
@@ -413,14 +348,14 @@ header {
     transition: transform 0.1s ease;
 }
 
-.hand-cursor.right .cursor-ring {
-    border-color: var(--primary);
-    box-shadow: 0 0 20px var(--accent-glow);
-}
+.hand-cursor.right .cursor-ring { border-color: var(--primary); box-shadow: 0 0 20px var(--accent-glow); }
+.hand-cursor.left .cursor-ring { border-color: #ff00ff; box-shadow: 0 0 20px rgba(255, 0, 255, 0.4); }
 
-.hand-cursor.left .cursor-ring {
-    border-color: #ff00ff;
-    box-shadow: 0 0 20px rgba(255, 0, 255, 0.4);
+.cursor-ring {
+    width: 100%;
+    height: 100%;
+    border: 3px solid;
+    border-radius: 50%;
 }
 
 .cursor-label {
@@ -433,53 +368,19 @@ header {
     color: #fff;
 }
 
-@keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    100% { transform: scale(1.4); opacity: 0; }
-}
-
-/* Bubbles */
-.bubble {
-    position: absolute;
-    width: 100px;
-    height: 100px;
-    background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.2), rgba(0,242,255,0.05));
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50%;
-    pointer-events: auto;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    font-weight: bold;
-    color: var(--primary);
-    cursor: none;
-}
-
-.bubble.hovered {
-    transform: scale(1.2);
-    border-color: var(--primary);
-    box-shadow: 0 0 30px var(--accent-glow);
-}
-
-.bubble.popped {
-    transform: scale(0);
-    opacity: 0;
-}
-
 /* Overlays */
 #start-overlay {
-    position: fixed; /* Changed from absolute for total coverage */
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.95);
-    z-index: 9999; /* Moved to front-most layer */
+    z-index: 9999;
     display: flex;
     justify-content: center;
     align-items: center;
-    pointer-events: auto; /* Force clickability */
+    pointer-events: auto;
     transition: opacity 0.5s ease;
 }
 
@@ -500,11 +401,7 @@ header {
     -webkit-text-fill-color: transparent;
 }
 
-.menu-card p {
-    color: #888;
-    margin-bottom: 2rem;
-    line-height: 1.6;
-}
+.menu-card p { color: #888; margin-bottom: 2rem; line-height: 1.6; }
 
 .btn {
     padding: 1rem 2rem;
@@ -525,4 +422,36 @@ header {
 .btn-primary:hover {
     transform: translateY(-5px);
     box-shadow: 0 0 50px var(--accent-glow);
+}
+
+.camera-selector-group {
+    margin-bottom: 2rem;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.camera-selector-group label {
+    font-size: 0.6rem;
+    font-weight: 800;
+    color: var(--primary);
+    letter-spacing: 2px;
+}
+
+.camera-select {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.8rem;
+    color: #fff;
+    font-family: inherit;
+    outline: none;
+    cursor: pointer;
+}
+
+.camera-select option {
+    background: #111;
+    color: #fff;
 }
