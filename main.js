@@ -229,23 +229,36 @@ function matchGesture(landmarks) {
 
 function isFist(landmarks) {
     const wrist = landmarks[0];
-    const fingerTips = [8, 12, 16, 20];
-    const fingerBases = [5, 9, 13, 17];
-    let foldedCount = 0;
-    for (let i = 0; i < 4; i++) {
-        if (getDistance(wrist, landmarks[fingerTips[i]]) < getDistance(wrist, landmarks[fingerBases[i]])) foldedCount++;
-    }
-    return foldedCount >= 3;
+    const tips = [8, 12, 16, 20];
+    const bases = [5, 9, 13, 17];
+    // ALL 4 fingers must be closer to the wrist than their bases
+    return tips.every((tipIdx, i) => getDistance(wrist, landmarks[tipIdx]) < getDistance(wrist, landmarks[bases[i]]));
+}
+
+function isPointer(landmarks) {
+    const wrist = landmarks[0];
+    const indexTip = landmarks[8];
+    const indexBase = landmarks[5];
+    const others = [12, 16, 20];
+    const otherBases = [9, 13, 17];
+
+    // Index must be well extended
+    const indexExtended = getDistance(wrist, indexTip) > getDistance(wrist, indexBase) * 1.6;
+    // Others must be folded
+    const othersFolded = others.every((tipIdx, i) => getDistance(wrist, landmarks[tipIdx]) < getDistance(wrist, landmarks[otherBases[i]]));
+
+    return indexExtended && othersFolded;
 }
 
 function isOpen(landmarks) {
     const wrist = landmarks[0];
-    const fingerTips = [8, 12, 16, 20];
-    const fingerBases = [5, 9, 13, 17];
+    const tips = [8, 12, 16, 20];
+    const bases = [5, 9, 13, 17];
+    // At least 3 fingers must be well extended
     let extendedCount = 0;
-    for (let i = 0; i < 4; i++) {
-        if (getDistance(wrist, landmarks[fingerTips[i]]) > getDistance(wrist, landmarks[fingerBases[i]]) * 1.3) extendedCount++;
-    }
+    tips.forEach((tipIdx, i) => {
+        if (getDistance(wrist, landmarks[tipIdx]) > getDistance(wrist, landmarks[bases[i]]) * 1.5) extendedCount++;
+    });
     return extendedCount >= 3;
 }
 
