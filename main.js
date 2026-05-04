@@ -476,37 +476,32 @@ function onResults(results) {
             const primaryColor = label === 'Right' ? '#00f2ff' : '#ff00ff';
             const secondaryColor = '#ffffff';
 
-            // Draw High-Density Skeleton
+            // 1. Draw High-Density Skeleton
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {
                 color: primaryColor,
-                lineWidth: 3
+                lineWidth: 2
             });
 
-            // Draw Primary Data Nodes (The 21 Joints)
+            // 2. Draw Primary Data Nodes
             drawLandmarks(canvasCtx, landmarks, {
                 color: primaryColor,
                 lineWidth: 1,
-                radius: 4
+                radius: 3
             });
 
-            // --- HIGH-DENSITY INTERPOLATION (Peak Performance Dots) ---
-            // We add interpolated dots between major joints to create a dense mesh look
+            // 3. Optimized Neural Mesh (Mid-points only, no shadows)
+            canvasCtx.fillStyle = secondaryColor;
             Hands.HAND_CONNECTIONS.forEach(([startIdx, endIdx]) => {
                 const start = landmarks[startIdx];
                 const end = landmarks[endIdx];
                 
-                // Add a "Sub-Node" at the 50% mark
+                // Single midpoint per connection
                 const midX = (start.x + end.x) / 2;
                 const midY = (start.y + end.y) / 2;
                 
-                canvasCtx.fillStyle = secondaryColor;
                 canvasCtx.beginPath();
-                canvasCtx.arc(midX * canvasElement.width, midY * canvasElement.height, 1.5, 0, 2 * Math.PI);
+                canvasCtx.arc(midX * canvasElement.width, midY * canvasElement.height, 1.2, 0, 2 * Math.PI);
                 canvasCtx.fill();
-                
-                // Add "Glow" to nodes
-                canvasCtx.shadowBlur = 10;
-                canvasCtx.shadowColor = primaryColor;
             });
             
             const customMatch = matchGesture(landmarks);
@@ -527,8 +522,8 @@ const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@m
 hands.setOptions({ 
     maxNumHands: 2, 
     modelComplexity: 1, 
-    minDetectionConfidence: 0.8, // Peak Accuracy
-    minTrackingConfidence: 0.8  // Peak Stability
+    minDetectionConfidence: 0.75, 
+    minTrackingConfidence: 0.75  
 });
 hands.onResults(onResults);
 
