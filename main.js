@@ -339,18 +339,51 @@ const cameraSelect = document.getElementById('camera-select');
 
 async function getCameras() {
     try {
-        await navigator.mediaDevices.getUserMedia({ video: true }); // Trigger permission
+        // Request permission if needed to see labels
+        await navigator.mediaDevices.getUserMedia({ video: true }); 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(d => d.kind === 'videoinput');
         
-        cameraSelect.innerHTML = videoDevices.map(d => 
+        // Sort: USB/External first, Virtual (OBS/Snap) last
+        const sortedDevices = videoDevices.sort((a, b) => {
+            const aLabel = a.label.toLowerCase();
+            const bLabel = b.label.toLowerCase();
+            
+            const isAUsb = aLabel.includes('usb') || aLabel.includes('external');
+            const isBUsb = bLabel.includes('usb') || bLabel.includes('external');
+            const isAVirtual = aLabel.includes('obs') || aLabel.includes('virtual');
+            const isBVirtual = bLabel.includes('obs') || bLabel.includes('virtual');
+
+            if (isAUsb && !isBUsb) return -1;
+            if (!isAUsb && isBUsb) return 1;
+            if (isAVirtual && !isBVirtual) return 1;
+            if (!isAVirtual && isBVirtual) return -1;
+            return 0;
+        });
+
+        if (sortedDevices.length === 0) {
+            cameraSelect.innerHTML = '<option value="">No Camera Found</option>';
+            return;
+        }
+
+        cameraSelect.innerHTML = sortedDevices.map(d => 
             `<option value="${d.deviceId}">${d.label || `Camera ${videoDevices.indexOf(d) + 1}`}</option>`
         ).join('');
+
+        // Auto-select the best (first) camera
+        cameraSelect.selectedIndex = 0;
+
     } catch (e) {
         console.error("Camera enumeration failed", e);
         cameraSelect.innerHTML = '<option value="">Permission Denied</option>';
     }
 }
+
+// Listen for hardware changes (Plug/Unplug)
+navigator.mediaDevices.addEventListener('devicechange', () => {
+    console.log("HandOS: Hardware Change Detected...");
+    getCameras();
+});
 
 let activeStream = null;
 
