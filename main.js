@@ -511,7 +511,8 @@ function onResults(results) {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         statusText.innerText = 'ONLINE';
         results.multiHandLandmarks.forEach((landmarks, index) => {
-            const label = results.multiHandedness[index].label === 'Right' ? 'Left' : 'Right';
+            // Correct Hand Identification for HandOS
+            const label = results.multiHandedness[index].label; 
             currentHandLandmarks = landmarks;
             const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
             
