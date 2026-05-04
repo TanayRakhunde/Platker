@@ -268,36 +268,38 @@ function handleRightHand(landmarks) {
     const wrist = landmarks[0];
     const thumbTip = landmarks[4];
     const indexTip = landmarks[8];
-    const indexBase = landmarks[5];
+    const middleBase = landmarks[9]; // More stable anchor
     
-    // 1. Palm-Scaled Sensitivity (Safety checked)
-    const palmSize = getDistance(wrist, indexBase) || 0.1;
-    const rawPinchDist = getDistance(thumbTip, indexTip) / palmSize;
+    // 1. PURE 2D Palm Scaling (Ignore Z for click stability)
+    const getDist2D = (p1, p2) => Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
     
-    // 2. Temporal Smoothing for Anti-Tremor
-    pinchSmoothDist = (pinchSmoothDist * 0.4) + (rawPinchDist * 0.6);
+    const palmSize = getDist2D(wrist, middleBase) || 0.1;
+    const rawPinchDist = getDist2D(thumbTip, indexTip) / palmSize;
     
-    // 3. Hysteresis (Schmitt Trigger) - Recalibrated
+    // 2. Temporal Smoothing
+    pinchSmoothDist = (pinchSmoothDist * 0.3) + (rawPinchDist * 0.7);
+    
+    // 3. Hyper-Sensitive Hysteresis
     let isPinching = isRightPinching;
-    if (!isRightPinching && pinchSmoothDist < 0.07) isPinching = true;
-    else if (isRightPinching && pinchSmoothDist > 0.12) isPinching = false;
+    if (!isRightPinching && pinchSmoothDist < 0.15) isPinching = true;
+    else if (isRightPinching && pinchSmoothDist > 0.22) isPinching = false;
 
     // 4. Cursor Movement
     const targetX = (1 - indexTip.x) * window.innerWidth;
     const targetY = indexTip.y * window.innerHeight;
     
-    // Dampen movement slightly when clicking for "Magnetic" precision
-    const lerpFactor = isPinching ? 0.15 : 0.4; 
+    const lerpFactor = isPinching ? 0.12 : 0.4; 
     rightHandPos.x += (targetX - rightHandPos.x) * lerpFactor;
     rightHandPos.y += (targetY - rightHandPos.y) * lerpFactor;
     
     cursorRight.style.left = `${rightHandPos.x}px`;
     cursorRight.style.top = `${rightHandPos.y}px`;
     
-    // Visual Feedback
-    cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.6 : 1})`;
-    cursorRight.style.background = isPinching ? 'rgba(0, 242, 255, 0.9)' : 'rgba(0, 242, 255, 0.4)';
-    cursorRight.style.boxShadow = isPinching ? '0 0 25px #00f2ff' : '0 0 10px #00f2ff';
+    // Visual Feedback (Pulse & Color Shift)
+    cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.5 : 1})`;
+    cursorRight.style.background = isPinching ? '#ffffff' : 'rgba(0, 242, 255, 0.4)';
+    cursorRight.style.border = isPinching ? '3px solid #00f2ff' : '2px solid rgba(255,255,255,0.5)';
+    cursorRight.style.boxShadow = isPinching ? '0 0 40px #ffffff' : '0 0 10px #00f2ff';
 
     // 5. Selection Logic
     if (isPinching) {
