@@ -270,17 +270,17 @@ function handleRightHand(landmarks) {
     const indexTip = landmarks[8];
     const indexBase = landmarks[5];
     
-    // 1. Palm-Scaled Sensitivity
-    const palmSize = getDistance(wrist, indexBase);
+    // 1. Palm-Scaled Sensitivity (Safety checked)
+    const palmSize = getDistance(wrist, indexBase) || 0.1;
     const rawPinchDist = getDistance(thumbTip, indexTip) / palmSize;
     
     // 2. Temporal Smoothing for Anti-Tremor
     pinchSmoothDist = (pinchSmoothDist * 0.4) + (rawPinchDist * 0.6);
     
-    // 3. Hysteresis (Schmitt Trigger)
+    // 3. Hysteresis (Schmitt Trigger) - Recalibrated
     let isPinching = isRightPinching;
-    if (!isRightPinching && pinchSmoothDist < PINCH_START) isPinching = true;
-    else if (isRightPinching && pinchSmoothDist > PINCH_END) isPinching = false;
+    if (!isRightPinching && pinchSmoothDist < 0.07) isPinching = true;
+    else if (isRightPinching && pinchSmoothDist > 0.12) isPinching = false;
 
     // 4. Cursor Movement
     const targetX = (1 - indexTip.x) * window.innerWidth;
