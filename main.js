@@ -511,23 +511,29 @@ function onResults(results) {
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         statusText.innerText = 'ONLINE';
         results.multiHandLandmarks.forEach((landmarks, index) => {
-            // Correct Hand Identification for HandOS
-            const label = results.multiHandedness[index].label; 
+            // CRITICAL: Mirrored labeling
+            const isMediaPipeRight = results.multiHandedness[index].label === 'Right';
+            const label = isMediaPipeRight ? 'Left' : 'Right';
+            
             currentHandLandmarks = landmarks;
             const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
             
-            // 1. Draw High-Performance Skeleton (Thicker for visibility)
+            // 1. Draw Skeleton
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {
                 color: color,
                 lineWidth: 4
             });
 
-            // 2. Draw "Neural Links" (Lines from Palm to Tips for easier tracking)
+            // 2. IDENTITY MARKER (Floating Text)
             const wrist = landmarks[0];
+            canvasCtx.fillStyle = color;
+            canvasCtx.font = "bold 20px Orbitron";
+            canvasCtx.fillText(label, wrist.x * canvasElement.width, wrist.y * canvasElement.height - 20);
+
+            // 3. Neural Links
             const tips = [4, 8, 12, 16, 20];
-            
             canvasCtx.beginPath();
-            canvasCtx.strokeStyle = color + '88'; // Semi-transparent links
+            canvasCtx.strokeStyle = color + '44'; 
             canvasCtx.lineWidth = 1;
             tips.forEach(tipIdx => {
                 const tip = landmarks[tipIdx];
@@ -536,7 +542,7 @@ function onResults(results) {
             });
             canvasCtx.stroke();
 
-            // 3. Draw Primary Joints (Nodes)
+            // 4. Joints
             drawLandmarks(canvasCtx, landmarks, {
                 color: '#ffffff',
                 fillColor: color,
@@ -547,8 +553,12 @@ function onResults(results) {
             const customMatch = matchGesture(landmarks);
             if (customMatch) actionEl.innerText = customMatch;
 
-            if (label === 'Right') handleRightHand(landmarks);
-            else handleLeftHand(landmarks);
+            if (label === 'Right') {
+                console.log("HandOS: Right Hand Detected");
+                handleRightHand(landmarks);
+            } else {
+                handleLeftHand(landmarks);
+            }
         });
     } else {
         statusText.innerText = 'OFFLINE';
