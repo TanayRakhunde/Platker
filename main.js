@@ -297,6 +297,10 @@ function handleRightHand(landmarks, isPinching) {
     isRightPinching = isPinching;
 }
 
+let wasFist = false;
+let wasOpen = false;
+let wasSnapping = false;
+
 function handleLeftHand(landmarks) {
     const targetX = (1 - landmarks[8].x) * window.innerWidth;
     const targetY = landmarks[8].y * window.innerHeight;
@@ -309,27 +313,50 @@ function handleLeftHand(landmarks) {
     const open = isOpen(landmarks);
     const snapping = getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
 
-    if (fist) {
-        const selection = window.getSelection().toString();
-        if (selection) {
-            clipboardBuffer = selection;
-            actionEl.innerText = "COPIED!";
-        }
-    } else if (open) {
-        if (clipboardBuffer && document.activeElement === targetArea && actionEl.innerText !== "PASTED!") {
-            targetArea.innerText += clipboardBuffer;
-            actionEl.innerText = "PASTED!";
-        }
-    } else if (snapping && !wasSnapping) {
+    // --- EDGE TRIGGERED LOGIC (FIRE ONCE PER GESTURE) ---
+
+    // 1. SNAP (DELETE) - Highest Priority
+    if (snapping && !wasSnapping) {
         if (document.activeElement === targetArea) {
             const selection = window.getSelection();
             if (!selection.isCollapsed) selection.deleteFromDocument();
             else targetArea.innerText = targetArea.innerText.slice(0, -1);
             actionEl.innerText = "DELETE";
+            console.log("HandOS: Snap Delete Triggered");
         }
-    } else if (!snapping) {
-        if (actionEl.innerText !== "IDLE") setTimeout(() => actionEl.innerText = "IDLE", 1000);
     }
+
+    // 2. FIST (COPY) - Only if not snapping
+    if (fist && !wasFist && !snapping) {
+        const selection = window.getSelection().toString();
+        if (selection) {
+            clipboardBuffer = selection;
+            actionEl.innerText = "COPIED!";
+            console.log("HandOS: Copy Triggered");
+        }
+    }
+
+    // 3. OPEN (PASTE) - Only if not snapping and was previously closed
+    if (open && !wasOpen && !fist && !snapping) {
+        if (clipboardBuffer && document.activeElement === targetArea) {
+            targetArea.innerText += clipboardBuffer;
+            actionEl.innerText = "PASTED!";
+            console.log("HandOS: Paste Triggered");
+        }
+    }
+
+    // Reset Action Label
+    if (!fist && !open && !snapping) {
+        if (actionEl.innerText !== "IDLE" && actionEl.innerText !== "ONLINE") {
+            setTimeout(() => {
+                if (!isFist(landmarks) && !isOpen(landmarks)) actionEl.innerText = "IDLE";
+            }, 800);
+        }
+    }
+
+    // Store states for next frame
+    wasFist = fist;
+    wasOpen = open;
     wasSnapping = snapping;
 }
 
