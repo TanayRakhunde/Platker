@@ -54,7 +54,7 @@ let selectionAnchorRange = null;
 // Left Hand States
 let wasFist = false;
 let wasOpen = false;
-let wasSnapping = false;
+let leftIndexHistory = []; // Track motion for swiping
 
 // --- GESTURE LAB LOGIC ---
 
@@ -302,52 +302,80 @@ function handleRightHand(landmarks, isPinching) {
 }
 
 function handleLeftHand(landmarks) {
-    const targetX = (1 - landmarks[8].x) * window.innerWidth;
-    const targetY = landmarks[8].y * window.innerHeight;
+    const tip = landmarks[8];
+    const targetX = (1 - tip.x) * window.innerWidth;
+    const targetY = tip.y * window.innerHeight;
+    
     leftHandPos.x += (targetX - leftHandPos.x) * 0.3;
     leftHandPos.y += (targetY - leftHandPos.y) * 0.3;
+    
     cursorLeft.style.left = `${leftHandPos.x}px`;
     cursorLeft.style.top = `${leftHandPos.y}px`;
 
-    const fist = isFist(landmarks);
-    const open = isOpen(landmarks);
-    const snapping = getDistance(landmarks[4], landmarks[12]) < PINCH_THRESHOLD;
+    // --- MOTION TRACKING FOR WAVE (RIGHT TO LEFT) ---
+    leftIndexHistory.push({ x: targetX, time: Date.now() });
+    if (leftIndexHistory.length > 10) leftIndexHistory.shift();
 
-    if (snapping && !wasSnapping) {
-        if (document.activeElement === targetArea) {
-            const selection = window.getSelection();
-            if (!selection.isCollapsed) selection.deleteFromDocument();
-            else targetArea.innerText = targetArea.innerText.slice(0, -1);
-            actionEl.innerText = "DELETE";
+    let isWaving = false;
+    if (leftIndexHistory.length >= 5) {
+        const start = leftIndexHistory[0];
+        const end = leftIndexHistory[leftIndexHistory.length - 1];
+        const dx = start.x - end.x; // Positive if moving Right to Left
+        const dt = end.time - start.time;
+        const velocity = dx / dt; // pixels per ms
+
+        // If swiping fast enough from Right to Left (> 0.8px/ms)
+        if (velocity > 0.8 && dx > 150) {
+            isWaving = true;
+            leftIndexHistory = []; // Reset history after trigger
         }
     }
 
-    if (fist && !wasFist && !snapping) {
+    const fist = isFist(landmarks);
+    const open = isOpen(landmarks);
+
+    // 1. WAVE (DELETE) - Right to Left motion
+    if (isWaving) {
+        if (document.activeElement === targetArea) {
+            const selection = window.getSelection();
+            if (!selection.isCollapsed) selection.deleteFromDocument();
+            else {
+                const text = targetArea.innerText;
+                targetArea.innerText = text.slice(0, -1);
+            }
+            actionEl.innerText = "DELETE";
+            console.log("HandOS: Wave Delete Triggered");
+        }
+    }
+
+    // 2. FIST (COPY)
+    if (fist && !wasFist) {
         const selection = window.getSelection().toString();
         if (selection) {
             clipboardBuffer = selection;
             actionEl.innerText = "COPIED!";
+            console.log("HandOS: Copy Triggered");
         }
     }
 
-    if (open && !wasOpen && !fist && !snapping) {
+    // 3. OPEN (PASTE)
+    if (open && !wasOpen && !fist) {
         if (clipboardBuffer && document.activeElement === targetArea) {
             targetArea.innerText += clipboardBuffer;
             actionEl.innerText = "PASTED!";
+            console.log("HandOS: Paste Triggered");
         }
     }
 
-    if (!fist && !open && !snapping) {
+    // Reset Action Label
+    if (!fist && !open && !isWaving) {
         if (actionEl.innerText !== "IDLE" && actionEl.innerText !== "ONLINE") {
-            setTimeout(() => {
-                if (!isFist(landmarks) && !isOpen(landmarks)) actionEl.innerText = "IDLE";
-            }, 800);
+            if (Date.now() - lastActionTime > 1000) actionEl.innerText = "IDLE";
         }
     }
 
     wasFist = fist;
     wasOpen = open;
-    wasSnapping = snapping;
 }
 
 // --- SYSTEM SETUP ---
