@@ -24,7 +24,8 @@ const progressBar = document.getElementById('record-progress-bar');
 const gestureListEl = document.getElementById('gesture-list');
 
 // --- STATE ---
-const PINCH_THRESHOLD = 0.06;
+const PINCH_START = 0.045; // Tighter to start
+const PINCH_END = 0.07;    // Looser to release
 const FIST_THRESHOLD = 0.12;
 const OPEN_THRESHOLD = 0.25;
 
@@ -32,6 +33,7 @@ let clipboardBuffer = "";
 let isRightPinching = false;
 let rightHandPos = { x: 0, y: 0 };
 let leftHandPos = { x: 0, y: 0 };
+let pinchSmoothDist = 0.1; // Smoothed pinch distance
 
 // Training State
 let gestureLibrary = JSON.parse(localStorage.getItem('handos_gestures') || '[]');
@@ -262,17 +264,42 @@ function isOpen(landmarks) {
     return extendedCount >= 3;
 }
 
-function handleRightHand(landmarks, isPinching) {
-    const targetX = (1 - landmarks[8].x) * window.innerWidth;
-    const targetY = landmarks[8].y * window.innerHeight;
-    const currentLerp = isPinching ? 0.08 : 0.3;
-    rightHandPos.x += (targetX - rightHandPos.x) * currentLerp;
-    rightHandPos.y += (targetY - rightHandPos.y) * currentLerp;
+function handleRightHand(landmarks) {
+    const wrist = landmarks[0];
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const indexBase = landmarks[5];
+    
+    // 1. Palm-Scaled Sensitivity
+    const palmSize = getDistance(wrist, indexBase);
+    const rawPinchDist = getDistance(thumbTip, indexTip) / palmSize;
+    
+    // 2. Temporal Smoothing for Anti-Tremor
+    pinchSmoothDist = (pinchSmoothDist * 0.4) + (rawPinchDist * 0.6);
+    
+    // 3. Hysteresis (Schmitt Trigger)
+    let isPinching = isRightPinching;
+    if (!isRightPinching && pinchSmoothDist < PINCH_START) isPinching = true;
+    else if (isRightPinching && pinchSmoothDist > PINCH_END) isPinching = false;
+
+    // 4. Cursor Movement
+    const targetX = (1 - indexTip.x) * window.innerWidth;
+    const targetY = indexTip.y * window.innerHeight;
+    
+    // Dampen movement slightly when clicking for "Magnetic" precision
+    const lerpFactor = isPinching ? 0.15 : 0.4; 
+    rightHandPos.x += (targetX - rightHandPos.x) * lerpFactor;
+    rightHandPos.y += (targetY - rightHandPos.y) * lerpFactor;
     
     cursorRight.style.left = `${rightHandPos.x}px`;
     cursorRight.style.top = `${rightHandPos.y}px`;
-    cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.7 : 1})`;
+    
+    // Visual Feedback
+    cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.6 : 1})`;
+    cursorRight.style.background = isPinching ? 'rgba(0, 242, 255, 0.9)' : 'rgba(0, 242, 255, 0.4)';
+    cursorRight.style.boxShadow = isPinching ? '0 0 25px #00f2ff' : '0 0 10px #00f2ff';
 
+    // 5. Selection Logic
     if (isPinching) {
         const sel = window.getSelection();
         const range = document.caretRangeFromPoint(rightHandPos.x, rightHandPos.y);
@@ -519,8 +546,7 @@ function onResults(results) {
             const customMatch = matchGesture(landmarks);
             if (customMatch) actionEl.innerText = customMatch;
 
-            const isPinching = getDistance(landmarks[4], landmarks[8]) < PINCH_THRESHOLD;
-            if (label === 'Right') handleRightHand(landmarks, isPinching);
+            if (label === 'Right') handleRightHand(landmarks);
             else handleLeftHand(landmarks);
         });
     } else {
