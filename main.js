@@ -473,35 +473,34 @@ function onResults(results) {
         results.multiHandLandmarks.forEach((landmarks, index) => {
             const label = results.multiHandedness[index].label === 'Right' ? 'Left' : 'Right';
             currentHandLandmarks = landmarks;
-            const primaryColor = label === 'Right' ? '#00f2ff' : '#ff00ff';
-            const secondaryColor = '#ffffff';
-
-            // 1. Draw High-Density Skeleton
+            const color = label === 'Right' ? '#00f2ff' : '#ff00ff';
+            
+            // 1. Draw High-Performance Skeleton (Thicker for visibility)
             drawConnectors(canvasCtx, landmarks, Hands.HAND_CONNECTIONS, {
-                color: primaryColor,
-                lineWidth: 2
+                color: color,
+                lineWidth: 4
             });
 
-            // 2. Draw Primary Data Nodes
+            // 2. Draw "Neural Links" (Lines from Palm to Tips for easier tracking)
+            const wrist = landmarks[0];
+            const tips = [4, 8, 12, 16, 20];
+            
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = color + '88'; // Semi-transparent links
+            canvasCtx.lineWidth = 1;
+            tips.forEach(tipIdx => {
+                const tip = landmarks[tipIdx];
+                canvasCtx.moveTo(wrist.x * canvasElement.width, wrist.y * canvasElement.height);
+                canvasCtx.lineTo(tip.x * canvasElement.width, tip.y * canvasElement.height);
+            });
+            canvasCtx.stroke();
+
+            // 3. Draw Primary Joints (Nodes)
             drawLandmarks(canvasCtx, landmarks, {
-                color: primaryColor,
+                color: '#ffffff',
+                fillColor: color,
                 lineWidth: 1,
                 radius: 3
-            });
-
-            // 3. Optimized Neural Mesh (Mid-points only, no shadows)
-            canvasCtx.fillStyle = secondaryColor;
-            Hands.HAND_CONNECTIONS.forEach(([startIdx, endIdx]) => {
-                const start = landmarks[startIdx];
-                const end = landmarks[endIdx];
-                
-                // Single midpoint per connection
-                const midX = (start.x + end.x) / 2;
-                const midY = (start.y + end.y) / 2;
-                
-                canvasCtx.beginPath();
-                canvasCtx.arc(midX * canvasElement.width, midY * canvasElement.height, 1.2, 0, 2 * Math.PI);
-                canvasCtx.fill();
             });
             
             const customMatch = matchGesture(landmarks);
@@ -521,9 +520,9 @@ function onResults(results) {
 const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
 hands.setOptions({ 
     maxNumHands: 2, 
-    modelComplexity: 1, 
-    minDetectionConfidence: 0.75, 
-    minTrackingConfidence: 0.75  
+    modelComplexity: 0, // Lite mode for zero-lag
+    minDetectionConfidence: 0.7, 
+    minTrackingConfidence: 0.7  
 });
 hands.onResults(onResults);
 
