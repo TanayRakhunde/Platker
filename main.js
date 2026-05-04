@@ -419,23 +419,38 @@ async function startCamera(deviceId) {
         activeStream.getTracks().forEach(track => track.stop());
     }
 
+    console.log(`HandOS: Requesting stream for device: ${deviceId || 'default'}`);
+
+    // Flexible constraints to support more USB cameras
     const constraints = {
         video: {
             deviceId: deviceId ? { exact: deviceId } : undefined,
-            width: 1280,
-            height: 720
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 }
         }
     };
 
     try {
         activeStream = await navigator.mediaDevices.getUserMedia(constraints);
         videoElement.srcObject = activeStream;
-        videoElement.play();
         
-        requestAnimationFrame(processFrame);
+        // Wait for metadata to ensure video dimensions are known
+        videoElement.onloadedmetadata = () => {
+            console.log("HandOS: Camera Metadata Loaded. Starting Sensors...");
+            videoElement.play();
+            requestAnimationFrame(processFrame);
+        };
+        
     } catch (e) {
-        console.error("Failed to start camera", e);
-        statusText.innerText = "ERROR: SENSOR BLOCKED";
+        console.error("HandOS: Critical Sensor Error", e);
+        // Fallback to default if exact deviceId failed
+        if (deviceId) {
+            console.warn("HandOS: Specific device failed, trying fallback to any camera...");
+            startCamera(null); 
+        } else {
+            statusText.innerText = "ERROR: SENSOR BLOCKED";
+        }
     }
 }
 
