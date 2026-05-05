@@ -31,7 +31,21 @@ body {
     height: 100%;
 }
 
-/* Hand Monitor Panel */
+#neural-grid {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 200%;
+    height: 200%;
+    background-image: 
+        linear-gradient(rgba(0, 242, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 242, 255, 0.05) 1px, transparent 1px);
+    background-size: 50px 50px;
+    transform: perspective(1000px) rotateX(60deg) translateY(-50%) translateX(-25%);
+    z-index: -1;
+    pointer-events: none;
+    transition: transform 0.1s ease-out;
+}
 .hand-monitor {
     position: absolute;
     bottom: 2rem;

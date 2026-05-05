@@ -220,7 +220,9 @@ function renderGestureList() {
     }
     
     gestureListEl.innerHTML = gestureLibrary.map((g, i) => `
-        <div class="gesture-item">
+        <div id="app">
+        <div id="neural-grid"></div>
+        <div class="system-nav">
             <div class="gesture-info">
                 <strong>${g.type === 'motion' ? '🎬' : '🖐️'} ${g.name}</strong>
                 <span class="gesture-type-tag">${g.type.toUpperCase()}</span>
@@ -345,7 +347,15 @@ function handleRightHand(landmarks) {
     const pinkyBase = landmarks[17];
     wristRotation = Math.atan2(pinkyBase.y - middleBase.y, pinkyBase.x - middleBase.x) * (180 / Math.PI);
 
-    // 5. Cursor Movement with 3D Parallax
+    // 5. Grid Warp (Environmental Reaction)
+    const grid = document.getElementById('neural-grid');
+    if (grid) {
+        const warpX = (indexTip.x - 0.5) * 50;
+        const warpY = (indexTip.y - 0.5) * 50;
+        grid.style.transform = `perspective(1000px) rotateX(60deg) translateY(-50%) translateX(-25%) translate3d(${warpX}px, ${warpY}px, 0)`;
+    }
+
+    // 6. Cursor Movement with 3D Parallax
     const targetX = (1 - indexTip.x) * window.innerWidth;
     const targetY = indexTip.y * window.innerHeight;
     const targetZ = Math.abs(wrist.z) * 10; // Depth scaling
