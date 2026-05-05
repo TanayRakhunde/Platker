@@ -459,16 +459,14 @@ navigator.mediaDevices.addEventListener('devicechange', getCameras);
 
 let activeStream = null;
 
-async function startCamera(deviceId) {
-    if (activeStream) {
-        activeStream.getTracks().forEach(track => track.stop());
-    }
-
+async function startCamera(deviceId = null) {
     const constraints = {
         video: {
             deviceId: deviceId ? { exact: deviceId } : undefined,
             width: { ideal: 1280 },
-            height: { ideal: 720 }
+            height: { ideal: 720 },
+            aspectRatio: 1.7777777778, // Force Wide FOV (16:9)
+            frameRate: { ideal: 30 }
         }
     };
 
@@ -572,9 +570,9 @@ function onResults(results) {
 const hands = new Hands({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}` });
 hands.setOptions({ 
     maxNumHands: 2, 
-    modelComplexity: 0, // Lite mode for zero-lag
-    minDetectionConfidence: 0.7, 
-    minTrackingConfidence: 0.7  
+    modelComplexity: 1, // Standard mode for higher precision
+    minDetectionConfidence: 0.8, 
+    minTrackingConfidence: 0.8  
 });
 hands.onResults(onResults);
 
