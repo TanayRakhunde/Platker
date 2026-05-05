@@ -23,17 +23,51 @@ const progressContainer = document.getElementById('record-progress-container');
 const progressBar = document.getElementById('record-progress-bar');
 const gestureListEl = document.getElementById('gesture-list');
 
+// --- IRON MAN PROTOCOL: AUDIO & HUD ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playFuturisticSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    
+    const now = audioCtx.currentTime;
+    if (type === 'pinch') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(440, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+    } else if (type === 'swipe') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.2);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+    } else if (type === 'fist') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(110, now);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.05);
+    }
+    
+    osc.start();
+    osc.stop(now + 0.2);
+}
+
 // --- STATE ---
-const PINCH_START = 0.045; // Tighter to start
-const PINCH_END = 0.07;    // Looser to release
+const PINCH_START = 0.15; 
+const PINCH_END = 0.22;
 const FIST_THRESHOLD = 0.12;
 const OPEN_THRESHOLD = 0.25;
 
 let clipboardBuffer = "";
 let isRightPinching = false;
-let rightHandPos = { x: 0, y: 0 };
-let leftHandPos = { x: 0, y: 0 };
-let pinchSmoothDist = 0.1; // Smoothed pinch distance
+let rightHandPos = { x: 0, y: 0, z: 0 };
+let leftHandPos = { x: 0, y: 0, z: 0 };
+let pinchSmoothDist = 0.1;
+let wristRotation = 0;
 
 // Training State
 let gestureLibrary = JSON.parse(localStorage.getItem('handos_gestures') || '[]');
@@ -279,27 +313,37 @@ function handleRightHand(landmarks) {
     // 2. Temporal Smoothing
     pinchSmoothDist = (pinchSmoothDist * 0.3) + (rawPinchDist * 0.7);
     
-    // 3. Hyper-Sensitive Hysteresis
+    // 3. Hysteresis (Schmitt Trigger) - Recalibrated
     let isPinching = isRightPinching;
-    if (!isRightPinching && pinchSmoothDist < 0.15) isPinching = true;
+    if (!isRightPinching && pinchSmoothDist < 0.15) {
+        isPinching = true;
+        playFuturisticSound('pinch');
+    }
     else if (isRightPinching && pinchSmoothDist > 0.22) isPinching = false;
 
-    // 4. Cursor Movement
+    // 4. Wrist Rotation (Dial Control)
+    const pinkyBase = landmarks[17];
+    wristRotation = Math.atan2(pinkyBase.y - middleBase.y, pinkyBase.x - middleBase.x) * (180 / Math.PI);
+
+    // 5. Cursor Movement with 3D Parallax
     const targetX = (1 - indexTip.x) * window.innerWidth;
     const targetY = indexTip.y * window.innerHeight;
+    const targetZ = Math.abs(wrist.z) * 10; // Depth scaling
     
     const lerpFactor = isPinching ? 0.12 : 0.4; 
     rightHandPos.x += (targetX - rightHandPos.x) * lerpFactor;
     rightHandPos.y += (targetY - rightHandPos.y) * lerpFactor;
+    rightHandPos.z += (targetZ - rightHandPos.z) * 0.1;
     
     cursorRight.style.left = `${rightHandPos.x}px`;
     cursorRight.style.top = `${rightHandPos.y}px`;
     
-    // Visual Feedback (Pulse & Color Shift)
-    cursorRight.style.transform = `translate(-50%, -50%) scale(${isPinching ? 0.5 : 1})`;
+    // Visual Feedback (Pulse & Color Shift + Depth Scale)
+    const depthScale = 1 + rightHandPos.z;
+    cursorRight.style.transform = `translate(-50%, -50%) scale(${(isPinching ? 0.5 : 1) * depthScale})`;
     cursorRight.style.background = isPinching ? '#ffffff' : 'rgba(0, 242, 255, 0.4)';
     cursorRight.style.border = isPinching ? '3px solid #00f2ff' : '2px solid rgba(255,255,255,0.5)';
-    cursorRight.style.boxShadow = isPinching ? '0 0 40px #ffffff' : '0 0 10px #00f2ff';
+    cursorRight.style.boxShadow = isPinching ? '0 0 40px #ffffff' : `0 0 ${10 * depthScale}px #00f2ff`;
 
     // 5. Selection Logic
     if (isPinching) {
@@ -524,11 +568,34 @@ function onResults(results) {
                 lineWidth: 4
             });
 
-            // 2. IDENTITY MARKER (Floating Text)
+            // 2. IRON MAN HUD: PALM CORE & SCANNING
             const wrist = landmarks[0];
+            const palm = landmarks[9];
+            
+            // Spinning Scanning Ring
+            const time = performance.now() / 500;
+            canvasCtx.beginPath();
+            canvasCtx.strokeStyle = color;
+            canvasCtx.lineWidth = 2;
+            canvasCtx.setLineDash([10, 10]);
+            canvasCtx.arc(wrist.x * canvasElement.width, wrist.y * canvasElement.height, 40, time, time + Math.PI * 1.5);
+            canvasCtx.stroke();
+            canvasCtx.setLineDash([]);
+
+            // Palm Energy Core
+            const coreGlow = 5 + Math.sin(time * 4) * 5;
+            canvasCtx.beginPath();
+            canvasCtx.fillStyle = '#fff';
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.shadowColor = color;
+            canvasCtx.arc(palm.x * canvasElement.width, palm.y * canvasElement.height, 6, 0, Math.PI * 2);
+            canvasCtx.fill();
+            canvasCtx.shadowBlur = 0;
+
+            // Identity Label
             canvasCtx.fillStyle = color;
-            canvasCtx.font = "bold 20px Orbitron";
-            canvasCtx.fillText(label, wrist.x * canvasElement.width, wrist.y * canvasElement.height - 20);
+            canvasCtx.font = "bold 14px Orbitron";
+            canvasCtx.fillText(`${label} [Z:${Math.abs(wrist.z).toFixed(2)}]`, wrist.x * canvasElement.width, wrist.y * canvasElement.height - 50);
 
             // 3. Neural Links
             const tips = [4, 8, 12, 16, 20];
