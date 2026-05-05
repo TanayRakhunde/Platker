@@ -23,8 +23,16 @@ const progressContainer = document.getElementById('record-progress-container');
 const progressBar = document.getElementById('record-progress-bar');
 const gestureListEl = document.getElementById('gesture-list');
 
-// --- IRON MAN PROTOCOL: AUDIO & HUD ---
+// --- IRON MAN PROTOCOL: AUDIO & VOICE ---
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const synth = window.speechSynthesis;
+function speak(text) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.pitch = 0.8;
+    utterance.rate = 1.1;
+    synth.speak(utterance);
+}
+
 function playFuturisticSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
     const osc = audioCtx.createOscillator();
@@ -54,6 +62,18 @@ function playFuturisticSound(type) {
     
     osc.start();
     osc.stop(now + 0.2);
+}
+
+// Particle Engine
+const particles = [];
+function addParticle(x, y, color) {
+    particles.push({
+        x, y, color,
+        size: Math.random() * 4 + 2,
+        life: 1.0,
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2
+    });
 }
 
 // --- STATE ---
@@ -426,22 +446,17 @@ function handleLeftHand(landmarks) {
             const selection = window.getSelection();
             if (!selection.isCollapsed) selection.deleteFromDocument();
             else {
-                const text = targetArea.innerText;
-                targetArea.innerText = text.slice(0, -1);
-            }
-            actionEl.innerText = "DELETE";
-            console.log("HandOS: Wave Delete Triggered");
-        }
-    }
-
-    // 2. FIST (COPY)
     if (fist && !wasFist) {
-        const selection = window.getSelection().toString();
-        if (selection) {
-            clipboardBuffer = selection;
-            actionEl.innerText = "COPIED!";
-            console.log("HandOS: Copy Triggered");
-        }
+        clipboardBuffer = window.getSelection().toString();
+        playFuturisticSound('fist');
+        speak("Neural Data Copied");
+        actionEl.innerText = "COPY";
+    }
+    if (open && wasOpen && landmarks[8].x - leftIndexHistory[0].x > 0.15) {
+        playFuturisticSound('swipe');
+        speak("System Backtrack");
+        document.execCommand('delete');
+        actionEl.innerText = "DELETE";
     }
 
     // 3. OPEN (PASTE)
@@ -548,9 +563,21 @@ function onResults(results) {
     canvasElement.height = rect.height;
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.scale(-1, 1);
-    canvasCtx.drawImage(results.image, -canvasElement.width, 0, canvasElement.width, canvasElement.height);
-    canvasCtx.scale(-1, 1);
+    // Draw Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        canvasCtx.globalAlpha = p.life;
+        canvasCtx.fillStyle = p.color;
+        canvasCtx.beginPath();
+        canvasCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        canvasCtx.fill();
+        
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        if (p.life <= 0) particles.splice(i, 1);
+    }
+    canvasCtx.globalAlpha = 1.0;
 
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         statusText.innerText = 'ONLINE';
@@ -592,12 +619,21 @@ function onResults(results) {
             canvasCtx.fill();
             canvasCtx.shadowBlur = 0;
 
-            // Identity Label
+            // 3. Particle Emission
+            if (performance.now() % 2 === 0) {
+                addParticle(palm.x * canvasElement.width, palm.y * canvasElement.height, color);
+            }
+
+            // 4. Identity Label & Telemetry
             canvasCtx.fillStyle = color;
+            canvasCtx.font = "bold 10px Orbitron";
+            canvasCtx.fillText(`SYSTEM_ACTIVE`, wrist.x * canvasElement.width + 50, wrist.y * canvasElement.height);
+            canvasCtx.fillText(`CONFIDENCE: ${(results.multiHandedness[index].score * 100).toFixed(0)}%`, wrist.x * canvasElement.width + 50, wrist.y * canvasElement.height + 15);
+            
             canvasCtx.font = "bold 14px Orbitron";
             canvasCtx.fillText(`${label} [Z:${Math.abs(wrist.z).toFixed(2)}]`, wrist.x * canvasElement.width, wrist.y * canvasElement.height - 50);
 
-            // 3. Neural Links
+            // 5. Neural Links
             const tips = [4, 8, 12, 16, 20];
             canvasCtx.beginPath();
             canvasCtx.strokeStyle = color + '44'; 
@@ -658,6 +694,7 @@ recordBtn.addEventListener('click', startMotionRecording);
 startBtn.addEventListener('click', () => {
     const deviceId = cameraSelect.value;
     startOverlay.style.opacity = '0';
+    speak("Welcome back, Boss. All systems online.");
     setTimeout(() => {
         startOverlay.style.display = 'none';
         startCamera(deviceId);
